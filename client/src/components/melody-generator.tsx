@@ -44,7 +44,7 @@ export default function MelodyGeneratorComponent() {
     currentNoteIndex: -1
   });
 
-  const [status, setStatus] = useState("Ready to generate melody");
+  const [status, setStatus] = useState("Loading audio engine...");
   const [toneLoaded, setToneLoaded] = useState(false);
   const synthRef = useRef<any>(null);
   const sequenceRef = useRef<any>(null);
@@ -55,13 +55,20 @@ export default function MelodyGeneratorComponent() {
     script.src = 'https://unpkg.com/tone@latest/build/Tone.js';
     script.onload = () => {
       setToneLoaded(true);
+      setStatus("Ready to generate melody");
       // Initialize synthesizer
       synthRef.current = new window.Tone.Synth().toDestination();
+    };
+    script.onerror = () => {
+      setStatus("Failed to load audio engine. Check your connection and refresh the page.");
+      setToneLoaded(false);
     };
     document.head.appendChild(script);
 
     return () => {
-      document.head.removeChild(script);
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
     };
   }, []);
 
@@ -151,17 +158,24 @@ export default function MelodyGeneratorComponent() {
 
   // Stop playback
   const stopPlayback = () => {
-    if (sequenceRef.current) {
-      sequenceRef.current.stop();
-      sequenceRef.current.dispose();
-      sequenceRef.current = null;
+    try {
+      if (sequenceRef.current) {
+        sequenceRef.current.stop();
+        sequenceRef.current.dispose();
+        sequenceRef.current = null;
+      }
+      
+      if (window.Tone && window.Tone.Transport) {
+        window.Tone.Transport.stop();
+        window.Tone.Transport.cancel();
+      }
+    } catch (error) {
+      console.error("Error during playback cleanup:", error);
+    } finally {
+      // Ensure state is reset regardless of errors
+      setState(prev => ({ ...prev, isPlaying: false, currentNoteIndex: -1 }));
+      setStatus("Playback complete");
     }
-    
-    window.Tone.Transport.stop();
-    window.Tone.Transport.cancel();
-    
-    setState(prev => ({ ...prev, isPlaying: false, currentNoteIndex: -1 }));
-    setStatus("Playback complete");
   };
 
   // Toggle playback
