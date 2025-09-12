@@ -214,6 +214,10 @@ export default function MelodyGeneratorComponent() {
                 max={180}
                 step={1}
                 className="slider-thumb"
+                thumbProps={{ 
+                  'data-testid': 'thumb-tempo', 
+                  'aria-label': 'Tempo (BPM)'
+                } as any}
               />
               <div className="flex justify-between text-xs text-muted-foreground mt-1">
                 <span>60</span>
@@ -290,6 +294,10 @@ export default function MelodyGeneratorComponent() {
                 max={16}
                 step={1}
                 className="slider-thumb"
+                thumbProps={{ 
+                  'data-testid': 'thumb-note-count', 
+                  'aria-label': 'Number of Notes'
+                } as any}
               />
               <div className="flex justify-between text-xs text-muted-foreground mt-1">
                 <span>4</span>
