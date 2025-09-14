@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Square, Info, RotateCcw } from "lucide-react";
+import { Play, Square, Info, RotateCcw, Clock } from "lucide-react";
 
 // Import Tone.js
 declare global {
@@ -21,6 +21,7 @@ interface MelodyState {
   generatedMelody: string[];
   currentNoteIndex: number;
   isLooping: boolean;
+  metronomeEnabled: boolean;
 }
 
 const scales = {
@@ -43,13 +44,16 @@ export default function MelodyGeneratorComponent() {
     isPlaying: false,
     generatedMelody: [],
     currentNoteIndex: -1,
-    isLooping: false
+    isLooping: false,
+    metronomeEnabled: false
   });
 
   const [status, setStatus] = useState("Loading audio engine...");
   const [toneLoaded, setToneLoaded] = useState(false);
   const synthRef = useRef<any>(null);
   const sequenceRef = useRef<any>(null);
+  const metronomeRef = useRef<any>(null);
+  const metronomeSequenceRef = useRef<any>(null);
 
   // Load Tone.js
   useEffect(() => {
@@ -60,6 +64,11 @@ export default function MelodyGeneratorComponent() {
       setStatus("Ready to generate melody");
       // Initialize synthesizer
       synthRef.current = new window.Tone.Synth().toDestination();
+      // Initialize metronome with a simple click sound
+      metronomeRef.current = new window.Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
+      }).toDestination();
     };
     script.onerror = () => {
       setStatus("Failed to load audio engine. Check your connection and refresh the page.");
@@ -198,6 +207,69 @@ export default function MelodyGeneratorComponent() {
     }
   };
 
+  // Start metronome
+  const startMetronome = () => {
+    if (!toneLoaded || !metronomeRef.current) return;
+
+    try {
+      // Stop any existing metronome sequence
+      if (metronomeSequenceRef.current) {
+        metronomeSequenceRef.current.stop();
+        metronomeSequenceRef.current.dispose();
+      }
+
+      // Create metronome sequence - quarter note clicks
+      metronomeSequenceRef.current = new window.Tone.Sequence(
+        (time: number) => {
+          // Play metronome click (high pitch for beat 1, lower for others)
+          metronomeRef.current.triggerAttackRelease("C6", "32n", time);
+        },
+        ["C6", "C5", "C5", "C5"], // First beat higher, others lower
+        "4n"
+      );
+
+      // Set tempo
+      window.Tone.Transport.bpm.value = state.tempo;
+      
+      // Start metronome
+      metronomeSequenceRef.current.loop = true;
+      metronomeSequenceRef.current.start();
+      
+      // Only start transport if it's not already running
+      if (window.Tone.Transport.state !== "started") {
+        window.Tone.Transport.start();
+      }
+
+    } catch (error) {
+      console.error("Metronome error:", error);
+    }
+  };
+
+  // Stop metronome
+  const stopMetronome = () => {
+    try {
+      if (metronomeSequenceRef.current) {
+        metronomeSequenceRef.current.stop();
+        metronomeSequenceRef.current.dispose();
+        metronomeSequenceRef.current = null;
+      }
+    } catch (error) {
+      console.error("Error stopping metronome:", error);
+    }
+  };
+
+  // Toggle metronome
+  const toggleMetronome = () => {
+    const newEnabled = !state.metronomeEnabled;
+    setState(prev => ({ ...prev, metronomeEnabled: newEnabled }));
+    
+    if (newEnabled) {
+      startMetronome();
+    } else {
+      stopMetronome();
+    }
+  };
+
   // Generate initial melody on mount
   useEffect(() => {
     generateMelody();
@@ -209,6 +281,13 @@ export default function MelodyGeneratorComponent() {
       generateMelody();
     }
   }, [state.noteCount]);
+
+  // Update metronome tempo when tempo changes
+  useEffect(() => {
+    if (state.metronomeEnabled && metronomeSequenceRef.current && window.Tone) {
+      window.Tone.Transport.bpm.value = state.tempo;
+    }
+  }, [state.tempo, state.metronomeEnabled]);
 
   return (
     <div className="w-full max-w-2xl">
@@ -355,20 +434,38 @@ export default function MelodyGeneratorComponent() {
           {/* Loop Control */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-foreground">Playback Options</label>
-            <div className="flex items-center gap-3">
-              <Button
-                variant={state.isLooping ? "default" : "outline"}
-                size="sm"
-                onClick={() => setState(prev => ({ ...prev, isLooping: !prev.isLooping }))}
-                className="flex items-center gap-2"
-                data-testid="button-loop-toggle"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>{state.isLooping ? "Loop On" : "Loop Off"}</span>
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {state.isLooping ? "Melody will repeat continuously" : "Melody will play once"}
-              </span>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant={state.isLooping ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setState(prev => ({ ...prev, isLooping: !prev.isLooping }))}
+                  className="flex items-center gap-2"
+                  data-testid="button-loop-toggle"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>{state.isLooping ? "Loop On" : "Loop Off"}</span>
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {state.isLooping ? "Melody will repeat continuously" : "Melody will play once"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant={state.metronomeEnabled ? "default" : "outline"}
+                  size="sm"
+                  onClick={toggleMetronome}
+                  className="flex items-center gap-2"
+                  disabled={!toneLoaded}
+                  data-testid="button-metronome-toggle"
+                >
+                  <Clock className="w-4 h-4" />
+                  <span>{state.metronomeEnabled ? "Metronome On" : "Metronome Off"}</span>
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {state.metronomeEnabled ? "Click track is playing" : "Click track is off"}
+                </span>
+              </div>
             </div>
           </div>
 
