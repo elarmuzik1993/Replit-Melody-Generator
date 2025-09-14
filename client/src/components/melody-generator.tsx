@@ -43,6 +43,33 @@ const timeSignatures = {
   "6/8": { name: "6/8 (Compound)", pattern: ["C6", "C5", "C5", "C5", "C5", "C5"], noteValue: "8n" }
 };
 
+// Scale degree weights for more musical melodies
+// Higher weights = more likely to be chosen
+const scaleWeights = {
+  major: [4.0, 1.0, 2.5, 1.5, 3.0, 1.5, 1.0], // 1=Tonic, 3=Mediant, 5=Dominant get higher weights
+  minor: [4.0, 1.0, 2.5, 1.5, 3.0, 1.0, 2.0], // Similar but 7th (leading tone) more likely
+  pentatonic: [4.0, 2.0, 2.5, 3.0, 2.0],       // More balanced for pentatonic
+  blues: [3.5, 2.5, 2.0, 1.5, 2.5, 2.0],       // Blues scale has different emphasis
+  dorian: [4.0, 1.0, 2.5, 1.5, 3.0, 2.0, 1.5], // Similar to minor but 6th emphasized
+  mixolydian: [4.0, 1.0, 2.5, 1.5, 3.0, 1.5, 2.0] // Similar to major but 7th emphasized
+};
+
+// Weighted random selection function
+const weightedRandomSelect = (items: any[], weights: number[]): any => {
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  let random = Math.random() * totalWeight;
+  
+  for (let i = 0; i < items.length; i++) {
+    random -= weights[i];
+    if (random <= 0) {
+      return items[i];
+    }
+  }
+  
+  // Fallback to last item if something goes wrong
+  return items[items.length - 1];
+};
+
 export default function MelodyGeneratorComponent() {
   const [state, setState] = useState<MelodyState>({
     tempo: 120,
@@ -100,9 +127,16 @@ export default function MelodyGeneratorComponent() {
     const baseNote = state.key;
     const octave = 4;
     
+    // Get scale weights for more musical generation
+    const weights = scaleWeights[state.scale as keyof typeof scaleWeights];
+    
     const melody = Array.from({ length: state.noteCount }, () => {
-      const scaleIndex = Math.floor(Math.random() * scaleNotes.length);
-      const semitone = scaleNotes[scaleIndex];
+      // Use weighted selection instead of pure random
+      const selectedScaleIndex = weightedRandomSelect(
+        scaleNotes.map((_, index) => index),
+        weights
+      );
+      const semitone = scaleNotes[selectedScaleIndex];
       const keyIndex = keys.indexOf(baseNote);
       const noteIndex = (keyIndex + semitone) % 12;
       return keys[noteIndex] + octave;
@@ -139,29 +173,32 @@ export default function MelodyGeneratorComponent() {
         sequenceRef.current.dispose();
       }
 
-      // Create sequence
-      let noteIndex = 0;
+      // Create sequence with manual index tracking
+      let currentNoteIndex = 0;
       sequenceRef.current = new window.Tone.Sequence(
         (time: number, note: string) => {
+          console.log(`Playing note ${currentNoteIndex}: ${note}`, time);
+          
           // Update current note index for visual feedback
-          setState(prev => ({ ...prev, currentNoteIndex: noteIndex }));
+          setState(prev => {
+            console.log(`Setting currentNoteIndex to ${currentNoteIndex}`);
+            return { ...prev, currentNoteIndex: currentNoteIndex };
+          });
           
           // Play the note
           synthRef.current.triggerAttackRelease(note, "8n", time);
           
-          noteIndex++;
+          // Increment index for next note
+          currentNoteIndex++;
           
-          // Handle end of sequence
-          if (noteIndex >= state.generatedMelody.length) {
-            if (state.isLooping) {
-              // Reset to start for looping
-              noteIndex = 0;
-            } else {
-              // Stop when all notes have been played (non-looping)
-              setTimeout(() => {
-                stopPlayback();
-              }, 200);
-            }
+          // Handle end of sequence for non-looping mode
+          if (!state.isLooping && currentNoteIndex >= state.generatedMelody.length) {
+            setTimeout(() => {
+              stopPlayback();
+            }, 500); // Give time for the last note to play
+          } else if (state.isLooping && currentNoteIndex >= state.generatedMelody.length) {
+            // Reset index for looping
+            currentNoteIndex = 0;
           }
         },
         state.generatedMelody,
