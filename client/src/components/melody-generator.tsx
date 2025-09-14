@@ -23,6 +23,7 @@ interface MelodyState {
   isLooping: boolean;
   metronomeEnabled: boolean;
   timeSignature: string;
+  soundType: string;
 }
 
 const scales = {
@@ -52,6 +53,54 @@ const scaleWeights = {
   blues: [3.5, 2.5, 2.0, 1.5, 2.5, 2.0],       // Blues scale has different emphasis
   dorian: [4.0, 1.0, 2.5, 1.5, 3.0, 2.0, 1.5], // Similar to minor but 6th emphasized
   mixolydian: [4.0, 1.0, 2.5, 1.5, 3.0, 1.5, 2.0] // Similar to major but 7th emphasized
+};
+
+// Synthesizer sound presets
+const synthPresets = {
+  basic: {
+    name: "Basic Synth",
+    config: () => new window.Tone.Synth().toDestination()
+  },
+  electric_piano: {
+    name: "Electric Piano",
+    config: () => new window.Tone.FMSynth({
+      harmonicity: 2,
+      modulationIndex: 20,
+      oscillator: { type: "sine" },
+      envelope: { attack: 0.01, decay: 2, sustain: 0.1, release: 2 },
+      modulation: { type: "square" },
+      modulationEnvelope: { attack: 0.002, decay: 0.2, sustain: 0, release: 0.2 }
+    }).toDestination()
+  },
+  sawtooth: {
+    name: "Sawtooth Wave",
+    config: () => new window.Tone.Synth({
+      oscillator: { type: "sawtooth" },
+      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
+    }).toDestination()
+  },
+  square: {
+    name: "Square Wave",
+    config: () => new window.Tone.Synth({
+      oscillator: { type: "square" },
+      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
+    }).toDestination()
+  },
+  sine: {
+    name: "Sine Wave",
+    config: () => new window.Tone.Synth({
+      oscillator: { type: "sine" },
+      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
+    }).toDestination()
+  },
+  pluck: {
+    name: "Plucked String",
+    config: () => new window.Tone.PluckSynth({
+      attackNoise: 1,
+      dampening: 4000,
+      resonance: 0.7
+    }).toDestination()
+  }
 };
 
 // Weighted random selection function
@@ -127,7 +176,8 @@ export default function MelodyGeneratorComponent() {
     currentNoteIndex: -1,
     isLooping: false,
     metronomeEnabled: false,
-    timeSignature: "4/4"
+    timeSignature: "4/4",
+    soundType: "basic"
   });
 
   const [status, setStatus] = useState("Loading audio engine...");
