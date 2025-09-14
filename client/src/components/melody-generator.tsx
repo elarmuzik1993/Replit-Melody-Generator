@@ -70,6 +70,52 @@ const weightedRandomSelect = (items: any[], weights: number[]): any => {
   return items[items.length - 1];
 };
 
+// Calculate semitone distance between two notes
+const calculateInterval = (note1: string, note2: string): number => {
+  // Extract note name and octave
+  const getNotePitch = (note: string) => {
+    const noteName = note.slice(0, -1); // Remove octave
+    const octave = parseInt(note.slice(-1)); // Get octave
+    const noteIndex = keys.indexOf(noteName);
+    return noteIndex + (octave * 12);
+  };
+  
+  const pitch1 = getNotePitch(note1);
+  const pitch2 = getNotePitch(note2);
+  return Math.abs(pitch2 - pitch1);
+};
+
+// Apply stepwise motion bias to weights
+const applyStepwiseBias = (baseWeights: number[], previousNote: string, currentScale: number[], keyIndex: number, octave: number): number[] => {
+  return baseWeights.map((weight, index) => {
+    // Calculate what the current note would be
+    const semitone = currentScale[index];
+    const noteIndex = (keyIndex + semitone) % 12;
+    const currentNote = keys[noteIndex] + octave;
+    
+    // Calculate interval from previous note
+    const interval = calculateInterval(previousNote, currentNote);
+    
+    // Apply bias based on interval size
+    let biasFactor = 1.0;
+    if (interval <= 2) {
+      // Small intervals (1-2 semitones): strong preference
+      biasFactor = 3.0;
+    } else if (interval <= 4) {
+      // Medium intervals (3-4 semitones): moderate preference  
+      biasFactor = 2.0;
+    } else if (interval <= 7) {
+      // Large intervals (5-7 semitones): slight preference
+      biasFactor = 1.2;
+    } else {
+      // Very large intervals (8+ semitones): discourage
+      biasFactor = 0.3;
+    }
+    
+    return weight * biasFactor;
+  });
+};
+
 export default function MelodyGeneratorComponent() {
   const [state, setState] = useState<MelodyState>({
     tempo: 120,
@@ -127,20 +173,37 @@ export default function MelodyGeneratorComponent() {
     const baseNote = state.key;
     const octave = 4;
     
-    // Get scale weights for more musical generation
-    const weights = scaleWeights[state.scale as keyof typeof scaleWeights];
+    // Get base scale weights for more musical generation
+    const baseWeights = scaleWeights[state.scale as keyof typeof scaleWeights];
+    const keyIndex = keys.indexOf(baseNote);
     
-    const melody = Array.from({ length: state.noteCount }, () => {
-      // Use weighted selection instead of pure random
+    const melody: string[] = [];
+    
+    for (let i = 0; i < state.noteCount; i++) {
+      let currentWeights = baseWeights;
+      
+      // Apply stepwise motion bias for all notes after the first
+      if (i > 0 && melody[i - 1]) {
+        currentWeights = applyStepwiseBias(
+          baseWeights, 
+          melody[i - 1], 
+          scaleNotes, 
+          keyIndex, 
+          octave
+        );
+      }
+      
+      // Use weighted selection with stepwise bias
       const selectedScaleIndex = weightedRandomSelect(
         scaleNotes.map((_, index) => index),
-        weights
+        currentWeights
       );
+      
       const semitone = scaleNotes[selectedScaleIndex];
-      const keyIndex = keys.indexOf(baseNote);
       const noteIndex = (keyIndex + semitone) % 12;
-      return keys[noteIndex] + octave;
-    });
+      const newNote = keys[noteIndex] + octave;
+      melody.push(newNote);
+    }
 
     setState(prev => ({ ...prev, generatedMelody: melody, currentNoteIndex: -1 }));
     setStatus("New melody generated! Click Play to hear it.");
@@ -177,13 +240,8 @@ export default function MelodyGeneratorComponent() {
       let currentNoteIndex = 0;
       sequenceRef.current = new window.Tone.Sequence(
         (time: number, note: string) => {
-          console.log(`Playing note ${currentNoteIndex}: ${note}`, time);
-          
           // Update current note index for visual feedback
-          setState(prev => {
-            console.log(`Setting currentNoteIndex to ${currentNoteIndex}`);
-            return { ...prev, currentNoteIndex: currentNoteIndex };
-          });
+          setState(prev => ({ ...prev, currentNoteIndex: currentNoteIndex }));
           
           // Play the note
           synthRef.current.triggerAttackRelease(note, "8n", time);
