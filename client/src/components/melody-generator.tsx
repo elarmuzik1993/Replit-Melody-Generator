@@ -22,6 +22,7 @@ interface MelodyState {
   currentNoteIndex: number;
   isLooping: boolean;
   metronomeEnabled: boolean;
+  timeSignature: string;
 }
 
 const scales = {
@@ -35,6 +36,13 @@ const scales = {
 
 const keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+const timeSignatures = {
+  "4/4": { name: "4/4 (Common)", pattern: ["C6", "C5", "C5", "C5"], noteValue: "4n" },
+  "3/4": { name: "3/4 (Waltz)", pattern: ["C6", "C5", "C5"], noteValue: "4n" },
+  "2/4": { name: "2/4 (March)", pattern: ["C6", "C5"], noteValue: "4n" },
+  "6/8": { name: "6/8 (Compound)", pattern: ["C6", "C5", "C5", "C5", "C5", "C5"], noteValue: "8n" }
+};
+
 export default function MelodyGeneratorComponent() {
   const [state, setState] = useState<MelodyState>({
     tempo: 120,
@@ -45,7 +53,8 @@ export default function MelodyGeneratorComponent() {
     generatedMelody: [],
     currentNoteIndex: -1,
     isLooping: false,
-    metronomeEnabled: false
+    metronomeEnabled: false,
+    timeSignature: "4/4"
   });
 
   const [status, setStatus] = useState("Loading audio engine...");
@@ -218,14 +227,17 @@ export default function MelodyGeneratorComponent() {
         metronomeSequenceRef.current.dispose();
       }
 
-      // Create metronome sequence - quarter note clicks
+      // Get time signature pattern
+      const timeSignature = timeSignatures[state.timeSignature as keyof typeof timeSignatures];
+      
+      // Create metronome sequence with dynamic pattern
       metronomeSequenceRef.current = new window.Tone.Sequence(
-        (time: number) => {
-          // Play metronome click (high pitch for beat 1, lower for others)
-          metronomeRef.current.triggerAttackRelease("C6", "32n", time);
+        (time: number, note: string) => {
+          // Play metronome click with dynamic pitches
+          metronomeRef.current.triggerAttackRelease(note, "32n", time);
         },
-        ["C6", "C5", "C5", "C5"], // First beat higher, others lower
-        "4n"
+        timeSignature.pattern,
+        timeSignature.noteValue
       );
 
       // Set tempo
@@ -289,6 +301,14 @@ export default function MelodyGeneratorComponent() {
     }
   }, [state.tempo, state.metronomeEnabled]);
 
+  // Restart metronome when time signature changes
+  useEffect(() => {
+    if (state.metronomeEnabled && toneLoaded) {
+      stopMetronome();
+      startMetronome();
+    }
+  }, [state.timeSignature]);
+
   return (
     <div className="w-full max-w-2xl">
       {/* Header Section */}
@@ -329,6 +349,35 @@ export default function MelodyGeneratorComponent() {
                 <span>180</span>
               </div>
             </div>
+          </div>
+
+          {/* Time Signature and Tempo Grid */}
+          <div className="grid md:grid-cols-2 gap-6">
+            
+            {/* Time Signature Selection */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground">Time Signature</label>
+              <Select 
+                value={state.timeSignature} 
+                onValueChange={(value) => {
+                  setState(prev => ({ ...prev, timeSignature: value }));
+                  setStatus(`Time signature changed to ${value}`);
+                }}
+              >
+                <SelectTrigger data-testid="select-time-signature">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(timeSignatures).map(([key, sig]) => (
+                    <SelectItem key={key} value={key}>{sig.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Placeholder for future controls */}
+            <div></div>
+
           </div>
 
           {/* Scale and Key Selection */}
