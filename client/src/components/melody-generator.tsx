@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Square, Info } from "lucide-react";
+import { Play, Square, Info, RotateCcw } from "lucide-react";
 
 // Import Tone.js
 declare global {
@@ -20,6 +20,7 @@ interface MelodyState {
   isPlaying: boolean;
   generatedMelody: string[];
   currentNoteIndex: number;
+  isLooping: boolean;
 }
 
 const scales = {
@@ -41,7 +42,8 @@ export default function MelodyGeneratorComponent() {
     noteCount: 8,
     isPlaying: false,
     generatedMelody: [],
-    currentNoteIndex: -1
+    currentNoteIndex: -1,
+    isLooping: false
   });
 
   const [status, setStatus] = useState("Loading audio engine...");
@@ -131,16 +133,25 @@ export default function MelodyGeneratorComponent() {
           
           noteIndex++;
           
-          // Stop when all notes have been played
+          // Handle end of sequence
           if (noteIndex >= state.generatedMelody.length) {
-            setTimeout(() => {
-              stopPlayback();
-            }, 200);
+            if (state.isLooping) {
+              // Reset to start for looping
+              noteIndex = 0;
+            } else {
+              // Stop when all notes have been played (non-looping)
+              setTimeout(() => {
+                stopPlayback();
+              }, 200);
+            }
           }
         },
         state.generatedMelody,
         "8n"
       );
+
+      // Set looping based on state
+      sequenceRef.current.loop = state.isLooping;
 
       // Set tempo
       window.Tone.Transport.bpm.value = state.tempo;
@@ -339,6 +350,26 @@ export default function MelodyGeneratorComponent() {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">Notes will highlight as they play</p>
+          </div>
+
+          {/* Loop Control */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-foreground">Playback Options</label>
+            <div className="flex items-center gap-3">
+              <Button
+                variant={state.isLooping ? "default" : "outline"}
+                size="sm"
+                onClick={() => setState(prev => ({ ...prev, isLooping: !prev.isLooping }))}
+                className="flex items-center gap-2"
+                data-testid="button-loop-toggle"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>{state.isLooping ? "Loop On" : "Loop Off"}</span>
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {state.isLooping ? "Melody will repeat continuously" : "Melody will play once"}
+              </span>
+            </div>
           </div>
 
           {/* Control Buttons */}
