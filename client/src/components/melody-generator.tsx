@@ -26,6 +26,7 @@ interface MelodyState {
   metronomeEnabled: boolean;
   timeSignature: string;
   soundType: string;
+  hasGeneratedMelody: boolean;
 }
 
 const scales = {
@@ -179,7 +180,8 @@ export default function MelodyGeneratorComponent() {
     isLooping: false,
     metronomeEnabled: false,
     timeSignature: "4/4",
-    soundType: "basic"
+    soundType: "basic",
+    hasGeneratedMelody: false
   });
 
   const [status, setStatus] = useState("Loading audio engine...");
@@ -295,7 +297,7 @@ export default function MelodyGeneratorComponent() {
     initializeSynth();
   }, [toneLoaded, state.soundType]);
 
-  // Generate melody based on current settings
+  // Generate melody based on current settings (for user-initiated generation)
   const generateMelody = () => {
     setStatus("Generating melody...");
     
@@ -335,8 +337,51 @@ export default function MelodyGeneratorComponent() {
       melody.push(newNote);
     }
 
-    setState(prev => ({ ...prev, generatedMelody: melody, currentNoteIndex: -1 }));
+    setState(prev => ({ ...prev, generatedMelody: melody, currentNoteIndex: -1, hasGeneratedMelody: true }));
     setStatus("New melody generated! Click Play to hear it.");
+  };
+
+  // Generate initial melody on mount (doesn't set hasGeneratedMelody flag)
+  const generateInitialMelody = () => {
+    const scaleNotes = scales[state.scale as keyof typeof scales];
+    const baseNote = state.key;
+    const octave = 4;
+    
+    // Get base scale weights for more musical generation
+    const baseWeights = scaleWeights[state.scale as keyof typeof scaleWeights];
+    const keyIndex = keys.indexOf(baseNote);
+    
+    const melody: string[] = [];
+    
+    for (let i = 0; i < state.noteCount; i++) {
+      let currentWeights = baseWeights;
+      
+      // Apply stepwise motion bias for all notes after the first
+      if (i > 0 && melody[i - 1]) {
+        currentWeights = applyStepwiseBias(
+          baseWeights, 
+          melody[i - 1], 
+          scaleNotes, 
+          keyIndex, 
+          octave
+        );
+      }
+      
+      // Use weighted selection with stepwise bias
+      const selectedScaleIndex = weightedRandomSelect(
+        scaleNotes.map((_, index) => index),
+        currentWeights
+      );
+      
+      const semitone = scaleNotes[selectedScaleIndex];
+      const noteIndex = (keyIndex + semitone) % 12;
+      const newNote = keys[noteIndex] + octave;
+      melody.push(newNote);
+    }
+
+    // Don't set hasGeneratedMelody flag for initial melody
+    setState(prev => ({ ...prev, generatedMelody: melody, currentNoteIndex: -1 }));
+    setStatus("Ready to generate melody");
   };
 
   // Start audio context and play melody
@@ -509,15 +554,19 @@ export default function MelodyGeneratorComponent() {
 
   // Generate initial melody on mount
   useEffect(() => {
-    generateMelody();
+    generateInitialMelody();
   }, []);
 
   // Update note indicators when noteCount changes
   useEffect(() => {
+    // Skip initial mount - let generateInitialMelody handle first render
+    if (state.generatedMelody.length === 0) return;
+    
     if (state.generatedMelody.length !== state.noteCount) {
-      generateMelody();
+      // Use appropriate generator based on whether user has explicitly generated
+      state.hasGeneratedMelody ? generateMelody() : generateInitialMelody();
     }
-  }, [state.noteCount]);
+  }, [state.noteCount, state.hasGeneratedMelody]);
 
   // Update metronome tempo when tempo changes
   useEffect(() => {
@@ -798,7 +847,7 @@ export default function MelodyGeneratorComponent() {
               variant="outline"
               onClick={exportMIDI}
               className="flex items-center justify-center gap-2"
-              disabled={!toneLoaded || state.generatedMelody.length === 0}
+              disabled={!toneLoaded || !state.hasGeneratedMelody}
               data-testid="button-midi-export"
             >
               <Download className="w-4 h-4" />
