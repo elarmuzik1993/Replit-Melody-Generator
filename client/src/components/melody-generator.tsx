@@ -41,9 +41,9 @@ const scales = {
 const keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 const timeSignatures = {
-  "4/4": { name: "4/4 (Common)", pattern: ["C6", "C5", "C5", "C5"], noteValue: "4n" },
-  "3/4": { name: "3/4 (Waltz)", pattern: ["C6", "C5", "C5"], noteValue: "4n" },
-  "2/4": { name: "2/4 (March)", pattern: ["C6", "C5"], noteValue: "4n" },
+  "4/4": { name: "4/4", pattern: ["C6", "C5", "C5", "C5"], noteValue: "4n" },
+  "3/4": { name: "3/4", pattern: ["C6", "C5", "C5"], noteValue: "4n" },
+  "2/4": { name: "2/4", pattern: ["C6", "C5"], noteValue: "4n" },
   "6/8": { name: "6/8 (Compound)", pattern: ["C6", "C5", "C5", "C5", "C5", "C5"], noteValue: "8n" }
 };
 
@@ -587,7 +587,7 @@ export default function MelodyGeneratorComponent() {
     <div className="w-full max-w-2xl">
       {/* Header Section */}
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-semibold text-foreground mb-2">Melody Generator</h1>
+        <h1 className="text-3xl font-semibold text-foreground mb-2">MELODY GENERATOR</h1>
         <p className="text-muted-foreground">Create beautiful melodies with simple controls</p>
       </div>
 
@@ -838,7 +838,7 @@ export default function MelodyGeneratorComponent() {
               ) : (
                 <>
                   <Play className="w-5 h-5" />
-                  <span>Play Melody</span>
+                  <span>Play</span>
                 </>
               )}
             </Button>
