@@ -187,6 +187,20 @@ export default function MelodyGeneratorComponent() {
   const metronomeRef = useRef<any>(null);
   const metronomeSequenceRef = useRef<any>(null);
 
+  // Initialize synthesizer based on selected sound type
+  const initializeSynth = () => {
+    if (!toneLoaded) return;
+    
+    // Dispose of existing synth
+    if (synthRef.current) {
+      synthRef.current.dispose();
+    }
+    
+    // Create new synth based on selected sound type
+    const preset = synthPresets[state.soundType as keyof typeof synthPresets];
+    synthRef.current = preset.config();
+  };
+
   // Load Tone.js
   useEffect(() => {
     const script = document.createElement('script');
@@ -194,8 +208,6 @@ export default function MelodyGeneratorComponent() {
     script.onload = () => {
       setToneLoaded(true);
       setStatus("Ready to generate melody");
-      // Initialize synthesizer
-      synthRef.current = new window.Tone.Synth().toDestination();
       // Initialize metronome with a simple click sound
       metronomeRef.current = new window.Tone.Synth({
         oscillator: { type: "sine" },
@@ -214,6 +226,11 @@ export default function MelodyGeneratorComponent() {
       }
     };
   }, []);
+
+  // Initialize synthesizer when Tone.js loads or sound type changes
+  useEffect(() => {
+    initializeSynth();
+  }, [toneLoaded, state.soundType]);
 
   // Generate melody based on current settings
   const generateMelody = () => {
