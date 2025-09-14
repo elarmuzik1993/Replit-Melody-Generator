@@ -573,6 +573,27 @@ export default function MelodyGeneratorComponent() {
               </Select>
             </div>
 
+            {/* Sound Selection */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground">Sound</label>
+              <Select 
+                value={state.soundType} 
+                onValueChange={(value) => {
+                  setState(prev => ({ ...prev, soundType: value }));
+                  setStatus(`Sound changed to ${synthPresets[value as keyof typeof synthPresets].name}`);
+                }}
+              >
+                <SelectTrigger data-testid="select-sound">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(synthPresets).map(([key, preset]) => (
+                    <SelectItem key={key} value={key}>{preset.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
           </div>
 
           {/* Number of Notes Control */}
