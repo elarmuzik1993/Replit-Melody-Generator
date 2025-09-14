@@ -3,7 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Square, Info, RotateCcw, Clock } from "lucide-react";
+import { Play, Square, Info, RotateCcw, Clock, Download } from "lucide-react";
+// @ts-ignore - midi-writer-js doesn't have TypeScript definitions
+import MidiWriter from "midi-writer-js";
 
 // Import Tone.js
 declare global {
@@ -199,6 +201,67 @@ export default function MelodyGeneratorComponent() {
     // Create new synth based on selected sound type
     const preset = synthPresets[state.soundType as keyof typeof synthPresets];
     synthRef.current = preset.config();
+  };
+
+  // Convert note name to MIDI note number
+  const noteToMidi = (noteName: string): number => {
+    const noteMap: { [key: string]: number } = {
+      'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5,
+      'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11
+    };
+    
+    const note = noteName.slice(0, -1); // Remove octave
+    const octave = parseInt(noteName.slice(-1)); // Get octave
+    
+    return noteMap[note] + (octave + 1) * 12; // MIDI octave offset
+  };
+
+  // Export melody as MIDI file
+  const exportMIDI = () => {
+    if (state.generatedMelody.length === 0) {
+      setStatus("Please generate a melody first!");
+      return;
+    }
+
+    try {
+      // Create MIDI track
+      const track = new MidiWriter.Track();
+      
+      // Set tempo (convert BPM to microseconds per quarter note)
+      track.setTempo(state.tempo);
+      
+      // Add time signature
+      const [numerator, denominator] = state.timeSignature.split('/').map(Number);
+      track.setTimeSignature(numerator, denominator, 24, 8);
+      
+      // Convert melody notes to MIDI events
+      state.generatedMelody.forEach((noteName) => {
+        const midiNote = noteToMidi(noteName);
+        const noteEvent = new MidiWriter.NoteEvent({
+          pitch: midiNote,
+          duration: '8', // Eighth note duration (matches our playback)
+          velocity: 64   // Medium velocity
+        });
+        track.addEvent(noteEvent);
+      });
+
+      // Create MIDI file
+      const write = new MidiWriter.Writer(track);
+      const midiData = write.dataUri();
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = midiData;
+      link.download = `melody_${state.key}_${state.scale}_${state.tempo}bpm.mid`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setStatus("MIDI file downloaded successfully!");
+    } catch (error) {
+      console.error('MIDI export error:', error);
+      setStatus("Error exporting MIDI file. Please try again.");
+    }
   };
 
   // Load Tone.js
@@ -729,6 +792,17 @@ export default function MelodyGeneratorComponent() {
                   <span>Play Melody</span>
                 </>
               )}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={exportMIDI}
+              className="flex items-center justify-center gap-2"
+              disabled={!toneLoaded || state.generatedMelody.length === 0}
+              data-testid="button-midi-export"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download MIDI</span>
             </Button>
           </div>
 
