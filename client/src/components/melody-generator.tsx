@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Square, Info, RotateCcw, Clock, Download } from "lucide-react";
+import { Play, Square, Info, RotateCcw, Clock, Download, Volume2, VolumeX, RefreshCw } from "lucide-react";
 // @ts-ignore - midi-writer-js doesn't have TypeScript definitions
 import MidiWriter from "midi-writer-js";
 
@@ -436,18 +436,19 @@ export default function MelodyGeneratorComponent() {
     bassSynthRef.current = new window.Tone.Synth({
       oscillator: { type: "sawtooth" },
       envelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.8 },
-      volume: -6 // Slightly quieter for balance
+      volume: window.Tone.gainToDb(state.tracks.bass.volume) - 6 // Apply track volume with bass adjustment
     }).toDestination();
     
-    // Create melody synth using current preset
-    const preset = synthPresets[state.soundType as keyof typeof synthPresets];
-    melodySynthRef.current = preset.config();
+    // Create melody synth using track-specific preset
+    const melodyPreset = synthPresets[state.tracks.melody.synthType as keyof typeof synthPresets];
+    melodySynthRef.current = melodyPreset.config();
+    melodySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.melody.volume);
     
     // Create harmony synth with pad-like characteristics
     harmonySynthRef.current = new window.Tone.Synth({
       oscillator: { type: "triangle" },
       envelope: { attack: 0.3, decay: 0.2, sustain: 0.7, release: 1.2 },
-      volume: -8 // Quieter for background harmony
+      volume: window.Tone.gainToDb(state.tracks.harmony.volume) - 8 // Apply track volume with harmony adjustment
     }).toDestination();
   };
 
@@ -524,7 +525,22 @@ export default function MelodyGeneratorComponent() {
 
   useEffect(() => {
     initializeSynths();
-  }, [toneLoaded, state.soundType]);
+  }, [toneLoaded, state.tracks.melody.synthType]);
+
+  // Update synth volumes dynamically when state changes
+  useEffect(() => {
+    if (!toneLoaded) return;
+    
+    if (bassSynthRef.current) {
+      bassSynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.bass.volume) - 6;
+    }
+    if (melodySynthRef.current) {
+      melodySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.melody.volume);
+    }
+    if (harmonySynthRef.current) {
+      harmonySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.harmony.volume) - 8;
+    }
+  }, [state.tracks.bass.volume, state.tracks.melody.volume, state.tracks.harmony.volume, toneLoaded]);
 
   const generateMelody = () => {
     setStatus("Generating melody...");
@@ -617,7 +633,6 @@ export default function MelodyGeneratorComponent() {
         const currentChord = selectedProgression[chordIndex];
         const chordTones = getChordTones(currentChord, scaleNotes, baseNote);
         
-        let harmonryNote: string;
         
         let harmonyNote: string;
         
@@ -752,8 +767,8 @@ export default function MelodyGeneratorComponent() {
         state.tracks.harmony.generatedSequence.length
       );
 
-      // Create synchronized sequences for each track
-      if (state.tracks.bass.generatedSequence.length > 0) {
+      // Create synchronized sequences for each track (only if enabled and has content)
+      if (state.tracks.bass.generatedSequence.length > 0 && state.tracks.bass.isEnabled) {
         bassSequenceRef.current = new window.Tone.Sequence(
           (time: number, note: string) => {
             if (note && note !== 'rest') {
@@ -766,7 +781,7 @@ export default function MelodyGeneratorComponent() {
         bassSequenceRef.current.loop = state.isLooping;
       }
 
-      if (state.tracks.melody.generatedSequence.length > 0) {
+      if (state.tracks.melody.generatedSequence.length > 0 && state.tracks.melody.isEnabled) {
         melodySequenceRef.current = new window.Tone.Sequence(
           (time: number, note: string) => {
             setState(prev => ({ ...prev, currentNoteIndex: currentNoteIndex }));
@@ -784,7 +799,7 @@ export default function MelodyGeneratorComponent() {
         melodySequenceRef.current.loop = state.isLooping;
       }
 
-      if (state.tracks.harmony.generatedSequence.length > 0) {
+      if (state.tracks.harmony.generatedSequence.length > 0 && state.tracks.harmony.isEnabled) {
         harmonySequenceRef.current = new window.Tone.Sequence(
           (time: number, note: string) => {
             if (note && note !== 'rest') {
@@ -945,19 +960,19 @@ export default function MelodyGeneratorComponent() {
     <div className="w-full max-w-2xl">
       {/* Header Section */}
       <div className="text-center mb-6">
-        <h1 className="text-3xl font-semibold text-foreground mb-2">MELODY GENERATOR</h1>
-        <p className="text-muted-foreground">Create beautiful melodies with simple controls</p>
+        <h1 className="text-3xl font-semibold text-foreground mb-2">MULTI-TRACK GENERATOR</h1>
+        <p className="text-muted-foreground">Create layered music with Bass, Melody, and Harmony</p>
       </div>
 
-      {/* ===== MOVED: Control Buttons (now under the header) ===== */}
+      {/* Global Control Buttons */}
       <div className="flex gap-4 mb-6">
         <Button
           variant="secondary"
-          onClick={generateMelody}
+          onClick={generateAllTracks}
           className="flex-1"
-          data-testid="button-generate"
+          data-testid="button-generate-all"
         >
-          Generate
+          Generate All Tracks
         </Button>
 
         <Button
@@ -991,19 +1006,20 @@ export default function MelodyGeneratorComponent() {
         </Button>
       </div>
 
-      {/* Main Control Panel */}
-      <Card className="shadow-lg border border-border">
-        <CardContent className="p-8 space-y-8">
-
-          {/* Tempo Control Section */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-foreground flex items-center justify-between">
-              <span>Tempo (BPM)</span>
-              <span className="text-primary font-semibold" data-testid="text-tempo-value">
-                {state.tempo}
-              </span>
-            </label>
-            <div className="relative">
+      {/* Global Settings */}
+      <Card className="shadow-lg border border-border mb-6">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4">Global Settings</h2>
+          
+          {/* Tempo and Time Signature */}
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                <span>Tempo (BPM)</span>
+                <span className="text-primary font-semibold" data-testid="text-tempo-value">
+                  {state.tempo}
+                </span>
+              </label>
               <Slider
                 data-testid="slider-tempo"
                 value={[state.tempo]}
@@ -1012,21 +1028,9 @@ export default function MelodyGeneratorComponent() {
                 max={180}
                 step={1}
                 className="slider-thumb"
-                thumbProps={{ 
-                  'data-testid': 'thumb-tempo', 
-                  'aria-label': 'Tempo (BPM)'
-                } as any}
               />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>60</span>
-                <span>120</span>
-                <span>180</span>
-              </div>
             </div>
-          </div>
-
-          {/* Time Signature and Tempo Grid */}
-          <div className="grid md:grid-cols-2 gap-6">
+            
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Time Signature</label>
               <Select 
@@ -1046,11 +1050,10 @@ export default function MelodyGeneratorComponent() {
                 </SelectContent>
               </Select>
             </div>
-            <div></div>
           </div>
 
-          {/* Scale and Key Selection */}
-          <div className="grid md:grid-cols-2 gap-6">
+          {/* Scale, Key, and Note Count */}
+          <div className="grid md:grid-cols-3 gap-6">
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Musical Scale</label>
               <Select 
@@ -1095,35 +1098,12 @@ export default function MelodyGeneratorComponent() {
             </div>
 
             <div className="space-y-3">
-              <label className="text-sm font-medium text-foreground">Sound</label>
-              <Select 
-                value={state.soundType} 
-                onValueChange={(value) => {
-                  setState(prev => ({ ...prev, soundType: value }));
-                  setStatus(`Sound changed to ${synthPresets[value as keyof typeof synthPresets].name}`);
-                }}
-              >
-                <SelectTrigger data-testid="select-sound">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(synthPresets).map(([key, preset]) => (
-                    <SelectItem key={key} value={key}>{preset.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Number of Notes Control */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-foreground flex items-center justify-between">
-              <span>Number of Notes</span>
-              <span className="text-primary font-semibold" data-testid="text-note-count">
-                {state.noteCount}
-              </span>
-            </label>
-            <div className="relative">
+              <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                <span>Notes per Track</span>
+                <span className="text-primary font-semibold" data-testid="text-note-count">
+                  {state.noteCount}
+                </span>
+              </label>
               <Slider
                 data-testid="slider-note-count"
                 value={[state.noteCount]}
@@ -1132,82 +1112,210 @@ export default function MelodyGeneratorComponent() {
                 max={16}
                 step={1}
                 className="slider-thumb"
-                thumbProps={{ 
-                  'data-testid': 'thumb-note-count', 
-                  'aria-label': 'Number of Notes'
-                } as any}
               />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>4</span>
-                <span>8</span>
-                <span>12</span>
-                <span>16</span>
-              </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Visual Note Indicators */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-foreground">Melody Preview</label>
-            <div className="flex flex-wrap gap-2" data-testid="note-indicators">
-              {Array.from({ length: state.noteCount }, (_, index) => (
-                <div
-                  key={index}
-                  className={`note-indicator w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium text-muted-foreground ${
-                    state.currentNoteIndex === index ? 'active' : ''
-                  }`}
-                  data-testid={`note-indicator-${index}`}
-                >
-                  {index + 1}
+      {/* Track Sections */}
+      <div className="space-y-4 mb-6">
+        {(['bass', 'melody', 'harmony'] as const).map((trackType) => (
+          <Card key={trackType} className="shadow-lg border border-border">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-semibold text-foreground capitalize">
+                    {trackType} Track
+                  </h3>
+                  <Button
+                    variant={state.tracks[trackType].isEnabled ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setState(prev => ({
+                      ...prev,
+                      tracks: {
+                        ...prev.tracks,
+                        [trackType]: {
+                          ...prev.tracks[trackType],
+                          isEnabled: !prev.tracks[trackType].isEnabled
+                        }
+                      }
+                    }))}
+                    className="flex items-center gap-2"
+                    data-testid={`button-${trackType}-toggle`}
+                  >
+                    {state.tracks[trackType].isEnabled ? (
+                      <><Volume2 className="w-4 h-4" />On</>
+                    ) : (
+                      <><VolumeX className="w-4 h-4" />Off</>
+                    )}
+                  </Button>
                 </div>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">Notes will highlight as they play</p>
-          </div>
-
-          {/* Loop Control */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-foreground">Playback Options</label>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
+                
                 <Button
-                  variant={state.isLooping ? "default" : "outline"}
+                  variant="secondary"
                   size="sm"
-                  onClick={() => setState(prev => ({ ...prev, isLooping: !prev.isLooping }))}
+                  onClick={() => {
+                    setStatus(`Generating ${trackType} track...`);
+                    const newSequence = generateTrack(trackType, trackType === 'harmony' ? state.tracks.melody.generatedSequence : undefined);
+                    setState(prev => ({
+                      ...prev,
+                      tracks: {
+                        ...prev.tracks,
+                        [trackType]: {
+                          ...prev.tracks[trackType],
+                          generatedSequence: newSequence,
+                          hasGenerated: true,
+                          currentNoteIndex: -1
+                        }
+                      }
+                    }));
+                    setStatus(`${trackType} track generated!`);
+                  }}
                   className="flex items-center gap-2"
-                  data-testid="button-loop-toggle"
+                  data-testid={`button-generate-${trackType}`}
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>{state.isLooping ? "Loop On" : "Loop Off"}</span>
+                  <RefreshCw className="w-4 h-4" />
+                  Generate
                 </Button>
-                <span className="text-xs text-muted-foreground">
-                  {state.isLooping ? "Melody will repeat continuously" : "Melody will play once"}
-                </span>
               </div>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant={state.metronomeEnabled ? "default" : "outline"}
-                  size="sm"
-                  onClick={toggleMetronome}
-                  className="flex items-center gap-2"
-                  disabled={!toneLoaded}
-                  data-testid="button-metronome-toggle"
-                >
-                  <Clock className="w-4 h-4" />
-                  <span>{state.metronomeEnabled ? "Metronome On" : "Metronome Off"}</span>
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {state.metronomeEnabled ? "Click track is playing" : "Click track is off"}
-                </span>
+
+              <div className="grid md:grid-cols-3 gap-4 mb-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                    <span>Volume</span>
+                    <span className="text-primary font-semibold">
+                      {Math.round(state.tracks[trackType].volume * 100)}%
+                    </span>
+                  </label>
+                  <Slider
+                    value={[state.tracks[trackType].volume]}
+                    onValueChange={(value) => setState(prev => ({
+                      ...prev,
+                      tracks: {
+                        ...prev.tracks,
+                        [trackType]: {
+                          ...prev.tracks[trackType],
+                          volume: value[0]
+                        }
+                      }
+                    }))}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    className="slider-thumb"
+                    data-testid={`slider-${trackType}-volume`}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Octave Range</label>
+                  <div className="text-sm text-muted-foreground">
+                    {state.tracks[trackType].octaveRange[0]} - {state.tracks[trackType].octaveRange[1]}
+                  </div>
+                </div>
+
+                {trackType === 'melody' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Sound</label>
+                    <Select 
+                      value={state.tracks.melody.synthType} 
+                      onValueChange={(value) => {
+                        setState(prev => ({
+                          ...prev,
+                          tracks: {
+                            ...prev.tracks,
+                            melody: {
+                              ...prev.tracks.melody,
+                              synthType: value
+                            }
+                          }
+                        }));
+                        setStatus(`Melody sound changed to ${synthPresets[value as keyof typeof synthPresets].name}`);
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-melody-sound">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(synthPresets).map(([key, preset]) => (
+                          <SelectItem key={key} value={key}>{preset.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
+
+              {/* Track Preview */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Track Preview</label>
+                <div className="flex flex-wrap gap-2" data-testid={`${trackType}-note-indicators`}>
+                  {state.tracks[trackType].hasGenerated ? (
+                    Array.from({ length: Math.min(state.tracks[trackType].generatedSequence.length, 8) }, (_, index) => (
+                      <div
+                        key={index}
+                        className={`note-indicator w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium text-muted-foreground ${
+                          state.tracks[trackType].currentNoteIndex === index ? 'active' : ''
+                        }`}
+                        data-testid={`${trackType}-note-indicator-${index}`}
+                      >
+                        {index + 1}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Generate track to see preview</div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Global Playback Options */}
+      <Card className="shadow-lg border border-border">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4">Playback Options</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="flex items-center gap-3">
+              <Button
+                variant={state.isLooping ? "default" : "outline"}
+                size="sm"
+                onClick={() => setState(prev => ({ ...prev, isLooping: !prev.isLooping }))}
+                className="flex items-center gap-2"
+                data-testid="button-loop-toggle"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>{state.isLooping ? "Loop On" : "Loop Off"}</span>
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {state.isLooping ? "Tracks will repeat continuously" : "Tracks will play once"}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Button
+                variant={state.metronomeEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={toggleMetronome}
+                className="flex items-center gap-2"
+                disabled={!toneLoaded}
+                data-testid="button-metronome-toggle"
+              >
+                <Clock className="w-4 h-4" />
+                <span>{state.metronomeEnabled ? "Metronome On" : "Metronome Off"}</span>
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {state.metronomeEnabled ? "Click track is playing" : "Click track is off"}
+              </span>
             </div>
           </div>
-
+          
           {/* Status Display */}
-          <div className="text-center text-sm text-muted-foreground" data-testid="text-status">
+          <div className="text-center text-sm text-muted-foreground mt-6" data-testid="text-status">
             {status}
           </div>
-
         </CardContent>
       </Card>
 
