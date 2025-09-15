@@ -312,6 +312,31 @@ const synthPresets = {
   }
 };
 
+// Helper functions to filter presets by track type
+const getPresetsForTrack = (trackType: 'bass' | 'melody' | 'harmony') => {
+  switch (trackType) {
+    case 'bass':
+      return Object.fromEntries(
+        Object.entries(synthPresets).filter(([key]) => 
+          ['bass_synth', 'sub_bass'].includes(key)
+        )
+      );
+    case 'harmony':
+      return Object.fromEntries(
+        Object.entries(synthPresets).filter(([key]) => 
+          ['pad_synth', 'string_pad'].includes(key)
+        )
+      );
+    case 'melody':
+    default:
+      return Object.fromEntries(
+        Object.entries(synthPresets).filter(([key]) => 
+          !['bass_synth', 'sub_bass', 'pad_synth', 'string_pad'].includes(key)
+        )
+      );
+  }
+};
+
 const weightedRandomSelect = (items: any[], weights?: number[]): any => {
   const w = (Array.isArray(weights) && weights.length === items.length)
     ? weights
@@ -432,24 +457,20 @@ export default function MelodyGeneratorComponent() {
     if (melodySynthRef.current) melodySynthRef.current.dispose();
     if (harmonySynthRef.current) harmonySynthRef.current.dispose();
     
-    // Create bass synth with lower, warmer tone
-    bassSynthRef.current = new window.Tone.Synth({
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.8 },
-      volume: window.Tone.gainToDb(state.tracks.bass.volume) - 6 // Apply track volume with bass adjustment
-    }).toDestination();
+    // Create bass synth using track-specific preset
+    const bassPreset = synthPresets[state.tracks.bass.synthType as keyof typeof synthPresets];
+    bassSynthRef.current = bassPreset.config();
+    bassSynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.bass.volume) - 6;
     
     // Create melody synth using track-specific preset
     const melodyPreset = synthPresets[state.tracks.melody.synthType as keyof typeof synthPresets];
     melodySynthRef.current = melodyPreset.config();
     melodySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.melody.volume);
     
-    // Create harmony synth with pad-like characteristics
-    harmonySynthRef.current = new window.Tone.Synth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.3, decay: 0.2, sustain: 0.7, release: 1.2 },
-      volume: window.Tone.gainToDb(state.tracks.harmony.volume) - 8 // Apply track volume with harmony adjustment
-    }).toDestination();
+    // Create harmony synth using track-specific preset
+    const harmonyPreset = synthPresets[state.tracks.harmony.synthType as keyof typeof synthPresets];
+    harmonySynthRef.current = harmonyPreset.config();
+    harmonySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.harmony.volume) - 8;
   };
 
   const noteToMidi = (noteName: string): number => {
@@ -525,7 +546,7 @@ export default function MelodyGeneratorComponent() {
 
   useEffect(() => {
     initializeSynths();
-  }, [toneLoaded, state.tracks.melody.synthType]);
+  }, [toneLoaded, state.tracks.melody.synthType, state.tracks.bass.synthType, state.tracks.harmony.synthType]);
 
   // Update synth volumes dynamically when state changes
   useEffect(() => {
@@ -619,16 +640,21 @@ export default function MelodyGeneratorComponent() {
     const keyIndex = keys.indexOf(baseNote);
     const sequence: string[] = [];
 
+    // Calculate notes to generate based on loop length and time signature (8th note grid)
+    const [beats, denominator] = state.timeSignature.split('/').map(Number);
+    const notesPerBar = beats * (8 / denominator); // 8th note subdivisions per bar
+    const notesToGenerate = Math.round(state.loopLength * notesPerBar);
+
     // Special handling for harmony with chord progressions
     if (trackType === 'harmony') {
       const scaleType = state.scale === 'major' || state.scale === 'pentatonic' ? 'major' : 'minor';
       const progressions = chordProgressions[scaleType] || chordProgressions.major;
       const selectedProgression = progressions[Math.floor(Math.random() * progressions.length)];
       
-      // Calculate notes per chord (distribute noteCount across progression)
-      const notesPerChord = Math.ceil(state.noteCount / selectedProgression.length);
+      // Calculate notes per chord (distribute notes across progression)
+      const notesPerChord = Math.ceil(notesToGenerate / selectedProgression.length);
       
-      for (let i = 0; i < state.noteCount; i++) {
+      for (let i = 0; i < notesToGenerate; i++) {
         const chordIndex = Math.floor(i / notesPerChord) % selectedProgression.length;
         const currentChord = selectedProgression[chordIndex];
         const chordTones = getChordTones(currentChord, scaleNotes, baseNote);
@@ -661,7 +687,7 @@ export default function MelodyGeneratorComponent() {
     // For melody and bass, use the existing logic
     const baseWeights = scaleWeights[trackType][state.scale as keyof typeof scaleWeights[typeof trackType]] ?? Array(scaleNotes.length).fill(1);
     
-    for (let i = 0; i < state.noteCount; i++) {
+    for (let i = 0; i < notesToGenerate; i++) {
       let currentWeights = baseWeights;
       
       // Apply track-specific musical logic
@@ -820,15 +846,24 @@ export default function MelodyGeneratorComponent() {
       if (melodySequenceRef.current) melodySequenceRef.current.start();
       if (harmonySequenceRef.current) harmonySequenceRef.current.start();
       
+      // Set Transport time signature and loop boundaries
+      const [beats, denominator] = state.timeSignature.split('/').map(Number);
+      window.Tone.Transport.timeSignature = [beats, denominator];
+      window.Tone.Transport.loopStart = 0;
+      window.Tone.Transport.loopEnd = `${state.loopLength}m`; // e.g., "4m" for 4 measures
+      window.Tone.Transport.loop = state.isLooping;
+
       // Start transport once to sync all sequences
       window.Tone.Transport.start();
 
       // Handle non-looping playback completion
       if (!state.isLooping) {
-        const playbackDuration = (maxSequenceLength * 60 / state.tempo) * 2; // 8th notes
+        // Calculate duration based on meter-aware math
+        const barSeconds = (60 / state.tempo) * beats * (4 / denominator);
+        const totalSeconds = barSeconds * state.loopLength;
         setTimeout(() => {
           stopPlayback();
-        }, playbackDuration * 1000 + 500);
+        }, totalSeconds * 1000 + 500);
       }
 
     } catch (error) {
@@ -1115,6 +1150,26 @@ export default function MelodyGeneratorComponent() {
               />
             </div>
           </div>
+
+          {/* Loop Length */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-foreground">Loop Length</label>
+            <Select 
+              value={state.loopLength.toString()} 
+              onValueChange={(value) => {
+                setState(prev => ({ ...prev, loopLength: parseInt(value) }));
+                setStatus(`Loop length set to ${value} bars`);
+              }}
+            >
+              <SelectTrigger data-testid="select-loop-length">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="4">4 Bars</SelectItem>
+                <SelectItem value="8">8 Bars</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -1215,36 +1270,34 @@ export default function MelodyGeneratorComponent() {
                   </div>
                 </div>
 
-                {trackType === 'melody' && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Sound</label>
-                    <Select 
-                      value={state.tracks.melody.synthType} 
-                      onValueChange={(value) => {
-                        setState(prev => ({
-                          ...prev,
-                          tracks: {
-                            ...prev.tracks,
-                            melody: {
-                              ...prev.tracks.melody,
-                              synthType: value
-                            }
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Sound</label>
+                  <Select 
+                    value={state.tracks[trackType].synthType} 
+                    onValueChange={(value) => {
+                      setState(prev => ({
+                        ...prev,
+                        tracks: {
+                          ...prev.tracks,
+                          [trackType]: {
+                            ...prev.tracks[trackType],
+                            synthType: value
                           }
-                        }));
-                        setStatus(`Melody sound changed to ${synthPresets[value as keyof typeof synthPresets].name}`);
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-melody-sound">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(synthPresets).map(([key, preset]) => (
-                          <SelectItem key={key} value={key}>{preset.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                        }
+                      }));
+                      setStatus(`${trackType.charAt(0).toUpperCase() + trackType.slice(1)} sound changed to ${synthPresets[value as keyof typeof synthPresets].name}`);
+                    }}
+                  >
+                    <SelectTrigger data-testid={`select-${trackType}-sound`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(getPresetsForTrack(trackType)).map(([key, preset]) => (
+                        <SelectItem key={key} value={key}>{preset.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Track Preview */}
