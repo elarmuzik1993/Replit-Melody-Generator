@@ -786,20 +786,27 @@ export default function MelodyGeneratorComponent() {
         harmonySequenceRef.current.dispose();
       }
 
-      let currentNoteIndex = 0;
-      const maxSequenceLength = Math.max(
-        state.tracks.bass.generatedSequence.length,
-        state.tracks.melody.generatedSequence.length,
-        state.tracks.harmony.generatedSequence.length
-      );
-
-      // Create synchronized sequences for each track (only if enabled and has content)
+      // Create synchronized sequences for each track with proper step counters
       if (state.tracks.bass.generatedSequence.length > 0 && state.tracks.bass.isEnabled) {
+        let bassIndex = 0;
+        const bassSequenceLength = state.tracks.bass.generatedSequence.length;
         bassSequenceRef.current = new window.Tone.Sequence(
           (time: number, note: string) => {
+            // Update bass track visual indicator
+            setState(prev => ({
+              ...prev,
+              tracks: {
+                ...prev.tracks,
+                bass: {
+                  ...prev.tracks.bass,
+                  currentNoteIndex: bassIndex
+                }
+              }
+            }));
             if (note && note !== 'rest') {
               bassSynthRef.current.triggerAttackRelease(note, "8n", time);
             }
+            bassIndex = (bassIndex + 1) % bassSequenceLength;
           },
           state.tracks.bass.generatedSequence,
           "8n"
@@ -808,16 +815,25 @@ export default function MelodyGeneratorComponent() {
       }
 
       if (state.tracks.melody.generatedSequence.length > 0 && state.tracks.melody.isEnabled) {
+        let melodyIndex = 0;
+        const melodySequenceLength = state.tracks.melody.generatedSequence.length;
         melodySequenceRef.current = new window.Tone.Sequence(
           (time: number, note: string) => {
-            setState(prev => ({ ...prev, currentNoteIndex: currentNoteIndex }));
+            // Update melody track visual indicator
+            setState(prev => ({
+              ...prev,
+              tracks: {
+                ...prev.tracks,
+                melody: {
+                  ...prev.tracks.melody,
+                  currentNoteIndex: melodyIndex
+                }
+              }
+            }));
             if (note && note !== 'rest') {
               melodySynthRef.current.triggerAttackRelease(note, "8n", time);
             }
-            currentNoteIndex++;
-            if (currentNoteIndex >= maxSequenceLength) {
-              currentNoteIndex = 0;
-            }
+            melodyIndex = (melodyIndex + 1) % melodySequenceLength;
           },
           state.tracks.melody.generatedSequence,
           "8n"
@@ -826,11 +842,25 @@ export default function MelodyGeneratorComponent() {
       }
 
       if (state.tracks.harmony.generatedSequence.length > 0 && state.tracks.harmony.isEnabled) {
+        let harmonyIndex = 0;
+        const harmonySequenceLength = state.tracks.harmony.generatedSequence.length;
         harmonySequenceRef.current = new window.Tone.Sequence(
           (time: number, note: string) => {
+            // Update harmony track visual indicator
+            setState(prev => ({
+              ...prev,
+              tracks: {
+                ...prev.tracks,
+                harmony: {
+                  ...prev.tracks.harmony,
+                  currentNoteIndex: harmonyIndex
+                }
+              }
+            }));
             if (note && note !== 'rest') {
               harmonySynthRef.current.triggerAttackRelease(note, "8n", time);
             }
+            harmonyIndex = (harmonyIndex + 1) % harmonySequenceLength;
           },
           state.tracks.harmony.generatedSequence,
           "8n"
@@ -1305,7 +1335,7 @@ export default function MelodyGeneratorComponent() {
                 <label className="text-sm font-medium text-foreground">Track Preview</label>
                 <div className="flex flex-wrap gap-2" data-testid={`${trackType}-note-indicators`}>
                   {state.tracks[trackType].hasGenerated ? (
-                    Array.from({ length: Math.min(state.tracks[trackType].generatedSequence.length, 8) }, (_, index) => (
+                    Array.from({ length: state.tracks[trackType].generatedSequence.length }, (_, index) => (
                       <div
                         key={index}
                         className={`note-indicator w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium text-muted-foreground ${
