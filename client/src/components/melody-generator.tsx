@@ -410,18 +410,45 @@ export default function MelodyGeneratorComponent() {
 
   const [status, setStatus] = useState("Loading audio engine...");
   const [toneLoaded, setToneLoaded] = useState(false);
-  const synthRef = useRef<any>(null);
-  const sequenceRef = useRef<any>(null);
+  
+  // Three separate synth instances for each track
+  const bassSynthRef = useRef<any>(null);
+  const melodySynthRef = useRef<any>(null);
+  const harmonySynthRef = useRef<any>(null);
+  
+  // Three separate sequence instances for synchronized playback
+  const bassSequenceRef = useRef<any>(null);
+  const melodySequenceRef = useRef<any>(null);
+  const harmonySequenceRef = useRef<any>(null);
+  
   const metronomeRef = useRef<any>(null);
   const metronomeSequenceRef = useRef<any>(null);
 
-  const initializeSynth = () => {
+  const initializeSynths = () => {
     if (!toneLoaded) return;
-    if (synthRef.current) {
-      synthRef.current.dispose();
-    }
+    
+    // Dispose existing synths
+    if (bassSynthRef.current) bassSynthRef.current.dispose();
+    if (melodySynthRef.current) melodySynthRef.current.dispose();
+    if (harmonySynthRef.current) harmonySynthRef.current.dispose();
+    
+    // Create bass synth with lower, warmer tone
+    bassSynthRef.current = new window.Tone.Synth({
+      oscillator: { type: "sawtooth" },
+      envelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.8 },
+      volume: -6 // Slightly quieter for balance
+    }).toDestination();
+    
+    // Create melody synth using current preset
     const preset = synthPresets[state.soundType as keyof typeof synthPresets];
-    synthRef.current = preset.config();
+    melodySynthRef.current = preset.config();
+    
+    // Create harmony synth with pad-like characteristics
+    harmonySynthRef.current = new window.Tone.Synth({
+      oscillator: { type: "triangle" },
+      envelope: { attack: 0.3, decay: 0.2, sustain: 0.7, release: 1.2 },
+      volume: -8 // Quieter for background harmony
+    }).toDestination();
   };
 
   const noteToMidi = (noteName: string): number => {
@@ -496,7 +523,7 @@ export default function MelodyGeneratorComponent() {
   }, []);
 
   useEffect(() => {
-    initializeSynth();
+    initializeSynths();
   }, [toneLoaded, state.soundType]);
 
   const generateMelody = () => {
@@ -681,13 +708,18 @@ export default function MelodyGeneratorComponent() {
   };
 
   const startPlayback = async () => {
-    if (!toneLoaded || !synthRef.current) {
+    if (!toneLoaded || !bassSynthRef.current || !melodySynthRef.current || !harmonySynthRef.current) {
       setStatus("Audio engine not loaded yet. Please wait...");
       return;
     }
 
-    if (state.generatedMelody.length === 0) {
-      setStatus("Please generate a melody first!");
+    // Check if we have generated tracks to play
+    const hasAnyTrack = state.tracks.bass.generatedSequence.length > 0 ||
+                        state.tracks.melody.generatedSequence.length > 0 ||
+                        state.tracks.harmony.generatedSequence.length > 0;
+
+    if (!hasAnyTrack) {
+      setStatus("Please generate at least one track first!");
       return;
     }
 
@@ -697,51 +729,120 @@ export default function MelodyGeneratorComponent() {
       }
 
       setState(prev => ({ ...prev, isPlaying: true, currentNoteIndex: -1 }));
-      setStatus("Playing melody...");
+      setStatus("Playing tracks...");
 
-      if (sequenceRef.current) {
-        sequenceRef.current.stop();
-        sequenceRef.current.dispose();
+      // Stop and dispose any existing sequences
+      if (bassSequenceRef.current) {
+        bassSequenceRef.current.stop();
+        bassSequenceRef.current.dispose();
+      }
+      if (melodySequenceRef.current) {
+        melodySequenceRef.current.stop();
+        melodySequenceRef.current.dispose();
+      }
+      if (harmonySequenceRef.current) {
+        harmonySequenceRef.current.stop();
+        harmonySequenceRef.current.dispose();
       }
 
       let currentNoteIndex = 0;
-      sequenceRef.current = new window.Tone.Sequence(
-        (time: number, note: string) => {
-          setState(prev => ({ ...prev, currentNoteIndex: currentNoteIndex }));
-          synthRef.current.triggerAttackRelease(note, "8n", time);
-          currentNoteIndex++;
-          if (!state.isLooping && currentNoteIndex >= state.generatedMelody.length) {
-            setTimeout(() => {
-              stopPlayback();
-            }, 500);
-          } else if (state.isLooping && currentNoteIndex >= state.generatedMelody.length) {
-            currentNoteIndex = 0;
-          }
-        },
-        state.generatedMelody,
-        "8n"
+      const maxSequenceLength = Math.max(
+        state.tracks.bass.generatedSequence.length,
+        state.tracks.melody.generatedSequence.length,
+        state.tracks.harmony.generatedSequence.length
       );
 
-      sequenceRef.current.loop = state.isLooping;
+      // Create synchronized sequences for each track
+      if (state.tracks.bass.generatedSequence.length > 0) {
+        bassSequenceRef.current = new window.Tone.Sequence(
+          (time: number, note: string) => {
+            if (note && note !== 'rest') {
+              bassSynthRef.current.triggerAttackRelease(note, "8n", time);
+            }
+          },
+          state.tracks.bass.generatedSequence,
+          "8n"
+        );
+        bassSequenceRef.current.loop = state.isLooping;
+      }
+
+      if (state.tracks.melody.generatedSequence.length > 0) {
+        melodySequenceRef.current = new window.Tone.Sequence(
+          (time: number, note: string) => {
+            setState(prev => ({ ...prev, currentNoteIndex: currentNoteIndex }));
+            if (note && note !== 'rest') {
+              melodySynthRef.current.triggerAttackRelease(note, "8n", time);
+            }
+            currentNoteIndex++;
+            if (currentNoteIndex >= maxSequenceLength) {
+              currentNoteIndex = 0;
+            }
+          },
+          state.tracks.melody.generatedSequence,
+          "8n"
+        );
+        melodySequenceRef.current.loop = state.isLooping;
+      }
+
+      if (state.tracks.harmony.generatedSequence.length > 0) {
+        harmonySequenceRef.current = new window.Tone.Sequence(
+          (time: number, note: string) => {
+            if (note && note !== 'rest') {
+              harmonySynthRef.current.triggerAttackRelease(note, "8n", time);
+            }
+          },
+          state.tracks.harmony.generatedSequence,
+          "8n"
+        );
+        harmonySequenceRef.current.loop = state.isLooping;
+      }
+
+      // Set tempo and start all sequences synchronously
       window.Tone.Transport.bpm.value = state.tempo;
-      sequenceRef.current.start();
+      
+      // Start all sequences simultaneously for perfect sync
+      if (bassSequenceRef.current) bassSequenceRef.current.start();
+      if (melodySequenceRef.current) melodySequenceRef.current.start();
+      if (harmonySequenceRef.current) harmonySequenceRef.current.start();
+      
+      // Start transport once to sync all sequences
       window.Tone.Transport.start();
+
+      // Handle non-looping playback completion
+      if (!state.isLooping) {
+        const playbackDuration = (maxSequenceLength * 60 / state.tempo) * 2; // 8th notes
+        setTimeout(() => {
+          stopPlayback();
+        }, playbackDuration * 1000 + 500);
+      }
 
     } catch (error) {
       console.error("Playback error:", error);
-      setStatus("Error playing melody. Please try again.");
+      setStatus("Error playing tracks. Please try again.");
       setState(prev => ({ ...prev, isPlaying: false }));
     }
   };
 
   const stopPlayback = () => {
     try {
-      if (sequenceRef.current) {
-        sequenceRef.current.stop();
-        sequenceRef.current.dispose();
-        sequenceRef.current = null;
+      // Stop and dispose all three sequences
+      if (bassSequenceRef.current) {
+        bassSequenceRef.current.stop();
+        bassSequenceRef.current.dispose();
+        bassSequenceRef.current = null;
+      }
+      if (melodySequenceRef.current) {
+        melodySequenceRef.current.stop();
+        melodySequenceRef.current.dispose();
+        melodySequenceRef.current = null;
+      }
+      if (harmonySequenceRef.current) {
+        harmonySequenceRef.current.stop();
+        harmonySequenceRef.current.dispose();
+        harmonySequenceRef.current = null;
       }
 
+      // Stop and clean up Transport
       if (window.Tone && window.Tone.Transport) {
         window.Tone.Transport.stop();
         window.Tone.Transport.cancel();
