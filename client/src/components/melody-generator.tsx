@@ -14,18 +14,39 @@ declare global {
   }
 }
 
-interface MelodyState {
-  tempo: number;
-  scale: string;
-  key: string;
-  noteCount: number;
-  isPlaying: boolean;
-  generatedMelody: string[];
+interface TrackData {
+  generatedSequence: string[];
+  isEnabled: boolean;
+  volume: number;
+  synthType: string;
   currentNoteIndex: number;
+  hasGenerated: boolean;
+  octaveRange: [number, number];
+}
+
+interface MultiTrackState {
+  // Global settings (shared across tracks)
+  tempo: number;
+  key: string;
+  scale: string;
+  timeSignature: string;
+  isPlaying: boolean;
   isLooping: boolean;
   metronomeEnabled: boolean;
-  timeSignature: string;
+  loopLength: number; // 4 or 8 bars
+  
+  // Individual track data
+  tracks: {
+    bass: TrackData;
+    melody: TrackData;
+    harmony: TrackData;
+  };
+  
+  // Legacy compatibility fields (temporary - to be removed after migration)
+  noteCount: number;
   soundType: string;
+  generatedMelody: string[];
+  currentNoteIndex: number;
   hasGeneratedMelody: boolean;
 }
 
@@ -47,33 +68,67 @@ const timeSignatures = {
   "6/8": { name: "6/8 (Compound)", pattern: ["C6", "C5", "C5", "C5", "C5", "C5"], noteValue: "8n" }
 };
 
-// Scale degree weights for more musical melodies
-// Higher weights = more likely to be chosen
+// Scale degree weights for different track types
 const scaleWeights = {
-  major: [4.0, 1.0, 2.5, 1.5, 3.0, 1.5, 1.0], // 1=Tonic, 3=Mediant, 5=Dominant get higher weights
-  minor: [4.0, 1.0, 2.5, 1.5, 3.0, 1.0, 2.0], // Similar but 7th (leading tone) more likely
-  pentatonic: [4.0, 2.0, 2.5, 3.0, 2.0],       // More balanced for pentatonic
-  blues: [3.5, 2.5, 2.0, 1.5, 2.5, 2.0],       // Blues scale has different emphasis
-  dorian: [4.0, 1.0, 2.5, 1.5, 3.0, 2.0, 1.5], // Similar to minor but 6th emphasized
-  mixolydian: [4.0, 1.0, 2.5, 1.5, 3.0, 1.5, 2.0] // Similar to major but 7th emphasized
+  // Melody weights - varied and expressive
+  melody: {
+    major: [4.0, 1.0, 2.5, 1.5, 3.0, 1.5, 1.0],
+    minor: [4.0, 1.0, 2.5, 1.5, 3.0, 1.0, 2.0],
+    pentatonic: [4.0, 2.0, 2.5, 3.0, 2.0],
+    blues: [3.5, 2.5, 2.0, 1.5, 2.5, 2.0],
+    dorian: [4.0, 1.0, 2.5, 1.5, 3.0, 2.0, 1.5],
+    mixolydian: [4.0, 1.0, 2.5, 1.5, 3.0, 1.5, 2.0]
+  },
+  // Bass weights - emphasis on roots and fifths
+  bass: {
+    major: [8.0, 0.5, 1.0, 0.5, 4.0, 0.5, 0.5], // Root and fifth emphasized
+    minor: [8.0, 0.5, 1.0, 0.5, 4.0, 0.5, 1.0],
+    pentatonic: [8.0, 1.0, 1.5, 4.0, 1.0],
+    blues: [6.0, 2.0, 1.0, 0.5, 3.0, 1.5],
+    dorian: [8.0, 0.5, 1.0, 0.5, 4.0, 1.0, 0.5],
+    mixolydian: [8.0, 0.5, 1.0, 0.5, 4.0, 0.5, 1.5]
+  },
+  // Harmony weights - emphasis on thirds and chord tones
+  harmony: {
+    major: [3.0, 1.0, 4.0, 2.0, 2.5, 2.0, 1.5], // Third emphasized
+    minor: [3.0, 1.0, 4.0, 2.0, 2.5, 1.5, 2.0],
+    pentatonic: [3.0, 2.5, 4.0, 2.5, 2.0],
+    blues: [2.5, 3.0, 2.5, 2.0, 2.0, 2.5],
+    dorian: [3.0, 1.0, 4.0, 2.0, 2.5, 2.5, 2.0],
+    mixolydian: [3.0, 1.0, 4.0, 2.0, 2.5, 2.0, 3.0]
+  }
 };
 
-// Synthesizer sound presets
 const synthPresets = {
   basic: {
     name: "Basic Synth",
     config: () => new window.Tone.Synth().toDestination()
   },
-  electric_piano: {
-    name: "Electric Piano",
-    config: () => new window.Tone.FMSynth({
-      harmonicity: 2,
-      modulationIndex: 20,
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.01, decay: 2, sustain: 0.1, release: 2 },
-      modulation: { type: "square" },
-      modulationEnvelope: { attack: 0.002, decay: 0.2, sustain: 0, release: 0.2 }
-    }).toDestination()
+    electric_piano: {
+      name: "Electric Piano",
+      config: () =>
+        new window.Tone.FMSynth({
+          harmonicity: 3, // ratio between carrier & modulator
+          modulationIndex: 10, // amount of modulation (brightness)
+          oscillator: {
+            type: "sine"
+          },
+          envelope: {
+            attack: 0.01,
+            decay: 1.2,
+            sustain: 0.3,
+            release: 1.8
+          },
+          modulation: {
+            type: "sine"
+          },
+          modulationEnvelope: {
+            attack: 0.002,
+            decay: 0.3,
+            sustain: 0.2,
+            release: 0.8
+          }
+        }).toDestination()
   },
   sawtooth: {
     name: "Sawtooth Wave",
@@ -96,91 +151,157 @@ const synthPresets = {
       envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
     }).toDestination()
   },
-  pluck: {
-    name: "Plucked String",
-    config: () => new window.Tone.PluckSynth({
-      attackNoise: 1,
-      dampening: 4000,
-      resonance: 0.7
+  bell: {
+    name: "Bell",
+    config: () =>
+      new window.Tone.FMSynth({
+        harmonicity: 5,          // wide spacing between carrier & modulator
+        modulationIndex: 12,     // controls brightness/clang
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.001,
+          decay: 3.5,
+          sustain: 0.1,
+          release: 4
+        },
+        modulation: { type: "sine" },
+        modulationEnvelope: {
+          attack: 0.001,
+          decay: 2.5,
+          sustain: 0,
+          release: 3
+        }
+      }).toDestination()
+  },
+  // Bass synths
+  bass_synth: {
+    name: "Bass Synth",
+    config: () => new window.Tone.Synth({
+      oscillator: { type: "sawtooth" },
+      envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.8 }
+    }).toDestination()
+  },
+  sub_bass: {
+    name: "Sub Bass",
+    config: () => new window.Tone.Synth({
+      oscillator: { type: "triangle" },
+      envelope: { attack: 0.02, decay: 0.3, sustain: 0.8, release: 1.2 }
+    }).toDestination()
+  },
+  // Harmony/Pad synths
+  pad_synth: {
+    name: "Warm Pad",
+    config: () => new window.Tone.Synth({
+      oscillator: { type: "sine" },
+      envelope: { attack: 0.8, decay: 0.5, sustain: 0.7, release: 2.0 }
+    }).toDestination()
+  },
+  string_pad: {
+    name: "String Pad",
+    config: () => new window.Tone.FMSynth({
+      harmonicity: 2,
+      modulationIndex: 8,
+      oscillator: { type: "sine" },
+      envelope: { attack: 1.2, decay: 0.8, sustain: 0.6, release: 3.0 },
+      modulation: { type: "sine" },
+      modulationEnvelope: { attack: 0.5, decay: 0.3, sustain: 0.4, release: 1.0 }
     }).toDestination()
   }
 };
 
-// Weighted random selection function
-const weightedRandomSelect = (items: any[], weights: number[]): any => {
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+const weightedRandomSelect = (items: any[], weights?: number[]): any => {
+  const w = (Array.isArray(weights) && weights.length === items.length)
+    ? weights
+    : Array(items.length).fill(1);
+  const totalWeight = w.reduce((sum, weight) => sum + weight, 0);
   let random = Math.random() * totalWeight;
-  
+
   for (let i = 0; i < items.length; i++) {
-    random -= weights[i];
+    random -= w[i];
     if (random <= 0) {
       return items[i];
     }
   }
-  
-  // Fallback to last item if something goes wrong
   return items[items.length - 1];
 };
 
-// Calculate semitone distance between two notes
 const calculateInterval = (note1: string, note2: string): number => {
-  // Extract note name and octave
   const getNotePitch = (note: string) => {
-    const noteName = note.slice(0, -1); // Remove octave
-    const octave = parseInt(note.slice(-1)); // Get octave
+    const noteName = note.slice(0, -1);
+    const octave = parseInt(note.slice(-1));
     const noteIndex = keys.indexOf(noteName);
     return noteIndex + (octave * 12);
   };
-  
+
   const pitch1 = getNotePitch(note1);
   const pitch2 = getNotePitch(note2);
   return Math.abs(pitch2 - pitch1);
 };
 
-// Apply stepwise motion bias to weights
 const applyStepwiseBias = (baseWeights: number[], previousNote: string, currentScale: number[], keyIndex: number, octave: number): number[] => {
   return baseWeights.map((weight, index) => {
-    // Calculate what the current note would be
     const semitone = currentScale[index];
     const noteIndex = (keyIndex + semitone) % 12;
     const currentNote = keys[noteIndex] + octave;
-    
-    // Calculate interval from previous note
     const interval = calculateInterval(previousNote, currentNote);
-    
-    // Apply bias based on interval size
     let biasFactor = 1.0;
     if (interval <= 2) {
-      // Small intervals (1-2 semitones): strong preference
       biasFactor = 3.0;
     } else if (interval <= 4) {
-      // Medium intervals (3-4 semitones): moderate preference  
       biasFactor = 2.0;
     } else if (interval <= 7) {
-      // Large intervals (5-7 semitones): slight preference
       biasFactor = 1.2;
     } else {
-      // Very large intervals (8+ semitones): discourage
       biasFactor = 0.3;
     }
-    
     return weight * biasFactor;
   });
 };
 
 export default function MelodyGeneratorComponent() {
-  const [state, setState] = useState<MelodyState>({
+  const [state, setState] = useState<MultiTrackState>({
     tempo: 120,
     scale: "major",
     key: "C",
-    noteCount: 8,
+    timeSignature: "4/4",
     isPlaying: false,
+    isLooping: true,
+    metronomeEnabled: false,
+    loopLength: 4, // 4 bars
+    tracks: {
+      bass: {
+        generatedSequence: [],
+        isEnabled: true,
+        volume: 0.8,
+        synthType: "bass_synth",
+        currentNoteIndex: -1,
+        hasGenerated: false,
+        octaveRange: [2, 3]
+      },
+      melody: {
+        generatedSequence: [],
+        isEnabled: true,
+        volume: 0.7,
+        synthType: "electric_piano",
+        currentNoteIndex: -1,
+        hasGenerated: false,
+        octaveRange: [4, 5]
+      },
+      harmony: {
+        generatedSequence: [],
+        isEnabled: true,
+        volume: 0.5,
+        synthType: "pad_synth",
+        currentNoteIndex: -1,
+        hasGenerated: false,
+        octaveRange: [4, 6]
+      }
+    },
+    // Legacy compatibility fields (mirrored from melody track)
+    noteCount: 8,
+    soundType: "electric_piano",
     generatedMelody: [],
     currentNoteIndex: -1,
-    isLooping: false,
-    metronomeEnabled: false,
-    timeSignature: "4/4",
-    soundType: "basic",
     hasGeneratedMelody: false
   });
 
@@ -191,34 +312,25 @@ export default function MelodyGeneratorComponent() {
   const metronomeRef = useRef<any>(null);
   const metronomeSequenceRef = useRef<any>(null);
 
-  // Initialize synthesizer based on selected sound type
   const initializeSynth = () => {
     if (!toneLoaded) return;
-    
-    // Dispose of existing synth
     if (synthRef.current) {
       synthRef.current.dispose();
     }
-    
-    // Create new synth based on selected sound type
     const preset = synthPresets[state.soundType as keyof typeof synthPresets];
     synthRef.current = preset.config();
   };
 
-  // Convert note name to MIDI note number
   const noteToMidi = (noteName: string): number => {
     const noteMap: { [key: string]: number } = {
       'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5,
       'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11
     };
-    
-    const note = noteName.slice(0, -1); // Remove octave
-    const octave = parseInt(noteName.slice(-1)); // Get octave
-    
-    return noteMap[note] + (octave + 1) * 12; // MIDI octave offset
+    const note = noteName.slice(0, -1);
+    const octave = parseInt(noteName.slice(-1));
+    return noteMap[note] + (octave + 1) * 12;
   };
 
-  // Export melody as MIDI file
   const exportMIDI = () => {
     if (state.generatedMelody.length === 0) {
       setStatus("Please generate a melody first!");
@@ -226,39 +338,29 @@ export default function MelodyGeneratorComponent() {
     }
 
     try {
-      // Create MIDI track
       const track = new MidiWriter.Track();
-      
-      // Set tempo (convert BPM to microseconds per quarter note)
       track.setTempo(state.tempo);
-      
-      // Add time signature
       const [numerator, denominator] = state.timeSignature.split('/').map(Number);
       track.setTimeSignature(numerator, denominator, 24, 8);
-      
-      // Convert melody notes to MIDI events
+
       state.generatedMelody.forEach((noteName) => {
         const midiNote = noteToMidi(noteName);
         const noteEvent = new MidiWriter.NoteEvent({
           pitch: midiNote,
-          duration: '8', // Eighth note duration (matches our playback)
-          velocity: 64   // Medium velocity
+          duration: '8',
+          velocity: 64
         });
         track.addEvent(noteEvent);
       });
 
-      // Create MIDI file
       const write = new MidiWriter.Writer(track);
       const midiData = write.dataUri();
-      
-      // Create download link
       const link = document.createElement('a');
       link.href = midiData;
       link.download = `melody_${state.key}_${state.scale}_${state.tempo}bpm.mid`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       setStatus("MIDI file downloaded successfully!");
     } catch (error) {
       console.error('MIDI export error:', error);
@@ -266,14 +368,12 @@ export default function MelodyGeneratorComponent() {
     }
   };
 
-  // Load Tone.js
   useEffect(() => {
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/tone@latest/build/Tone.js';
     script.onload = () => {
       setToneLoaded(true);
       setStatus("Ready to generate melody");
-      // Initialize metronome with a simple click sound
       metronomeRef.current = new window.Tone.Synth({
         oscillator: { type: "sine" },
         envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
@@ -292,29 +392,22 @@ export default function MelodyGeneratorComponent() {
     };
   }, []);
 
-  // Initialize synthesizer when Tone.js loads or sound type changes
   useEffect(() => {
     initializeSynth();
   }, [toneLoaded, state.soundType]);
 
-  // Generate melody based on current settings (for user-initiated generation)
   const generateMelody = () => {
     setStatus("Generating melody...");
-    
+
     const scaleNotes = scales[state.scale as keyof typeof scales];
     const baseNote = state.key;
     const octave = 4;
-    
-    // Get base scale weights for more musical generation
-    const baseWeights = scaleWeights[state.scale as keyof typeof scaleWeights];
+    const baseWeights = scaleWeights.melody[state.scale as keyof typeof scaleWeights.melody] ?? Array(scaleNotes.length).fill(1);
     const keyIndex = keys.indexOf(baseNote);
-    
     const melody: string[] = [];
-    
+
     for (let i = 0; i < state.noteCount; i++) {
       let currentWeights = baseWeights;
-      
-      // Apply stepwise motion bias for all notes after the first
       if (i > 0 && melody[i - 1]) {
         currentWeights = applyStepwiseBias(
           baseWeights, 
@@ -324,13 +417,10 @@ export default function MelodyGeneratorComponent() {
           octave
         );
       }
-      
-      // Use weighted selection with stepwise bias
       const selectedScaleIndex = weightedRandomSelect(
         scaleNotes.map((_, index) => index),
         currentWeights
       );
-      
       const semitone = scaleNotes[selectedScaleIndex];
       const noteIndex = (keyIndex + semitone) % 12;
       const newNote = keys[noteIndex] + octave;
@@ -341,22 +431,16 @@ export default function MelodyGeneratorComponent() {
     setStatus("New melody generated! Click Play to hear it.");
   };
 
-  // Generate initial melody on mount (doesn't set hasGeneratedMelody flag)
   const generateInitialMelody = () => {
     const scaleNotes = scales[state.scale as keyof typeof scales];
     const baseNote = state.key;
     const octave = 4;
-    
-    // Get base scale weights for more musical generation
-    const baseWeights = scaleWeights[state.scale as keyof typeof scaleWeights];
+    const baseWeights = scaleWeights.melody[state.scale as keyof typeof scaleWeights.melody] ?? Array(scaleNotes.length).fill(1);
     const keyIndex = keys.indexOf(baseNote);
-    
     const melody: string[] = [];
-    
+
     for (let i = 0; i < state.noteCount; i++) {
       let currentWeights = baseWeights;
-      
-      // Apply stepwise motion bias for all notes after the first
       if (i > 0 && melody[i - 1]) {
         currentWeights = applyStepwiseBias(
           baseWeights, 
@@ -366,25 +450,20 @@ export default function MelodyGeneratorComponent() {
           octave
         );
       }
-      
-      // Use weighted selection with stepwise bias
       const selectedScaleIndex = weightedRandomSelect(
         scaleNotes.map((_, index) => index),
         currentWeights
       );
-      
       const semitone = scaleNotes[selectedScaleIndex];
       const noteIndex = (keyIndex + semitone) % 12;
       const newNote = keys[noteIndex] + octave;
       melody.push(newNote);
     }
 
-    // Don't set hasGeneratedMelody flag for initial melody
     setState(prev => ({ ...prev, generatedMelody: melody, currentNoteIndex: -1 }));
     setStatus("Ready to generate melody");
   };
 
-  // Start audio context and play melody
   const startPlayback = async () => {
     if (!toneLoaded || !synthRef.current) {
       setStatus("Audio engine not loaded yet. Please wait...");
@@ -397,7 +476,6 @@ export default function MelodyGeneratorComponent() {
     }
 
     try {
-      // Start audio context
       if (window.Tone.context.state !== 'running') {
         await window.Tone.start();
       }
@@ -405,32 +483,22 @@ export default function MelodyGeneratorComponent() {
       setState(prev => ({ ...prev, isPlaying: true, currentNoteIndex: -1 }));
       setStatus("Playing melody...");
 
-      // Stop any existing sequence
       if (sequenceRef.current) {
         sequenceRef.current.stop();
         sequenceRef.current.dispose();
       }
 
-      // Create sequence with manual index tracking
       let currentNoteIndex = 0;
       sequenceRef.current = new window.Tone.Sequence(
         (time: number, note: string) => {
-          // Update current note index for visual feedback
           setState(prev => ({ ...prev, currentNoteIndex: currentNoteIndex }));
-          
-          // Play the note
           synthRef.current.triggerAttackRelease(note, "8n", time);
-          
-          // Increment index for next note
           currentNoteIndex++;
-          
-          // Handle end of sequence for non-looping mode
           if (!state.isLooping && currentNoteIndex >= state.generatedMelody.length) {
             setTimeout(() => {
               stopPlayback();
-            }, 500); // Give time for the last note to play
+            }, 500);
           } else if (state.isLooping && currentNoteIndex >= state.generatedMelody.length) {
-            // Reset index for looping
             currentNoteIndex = 0;
           }
         },
@@ -438,13 +506,8 @@ export default function MelodyGeneratorComponent() {
         "8n"
       );
 
-      // Set looping based on state
       sequenceRef.current.loop = state.isLooping;
-
-      // Set tempo
       window.Tone.Transport.bpm.value = state.tempo;
-      
-      // Start sequence
       sequenceRef.current.start();
       window.Tone.Transport.start();
 
@@ -455,7 +518,6 @@ export default function MelodyGeneratorComponent() {
     }
   };
 
-  // Stop playback
   const stopPlayback = () => {
     try {
       if (sequenceRef.current) {
@@ -463,7 +525,7 @@ export default function MelodyGeneratorComponent() {
         sequenceRef.current.dispose();
         sequenceRef.current = null;
       }
-      
+
       if (window.Tone && window.Tone.Transport) {
         window.Tone.Transport.stop();
         window.Tone.Transport.cancel();
@@ -471,13 +533,11 @@ export default function MelodyGeneratorComponent() {
     } catch (error) {
       console.error("Error during playback cleanup:", error);
     } finally {
-      // Ensure state is reset regardless of errors
       setState(prev => ({ ...prev, isPlaying: false, currentNoteIndex: -1 }));
       setStatus("Playback complete");
     }
   };
 
-  // Toggle playback
   const togglePlayback = () => {
     if (state.isPlaying) {
       stopPlayback();
@@ -486,38 +546,28 @@ export default function MelodyGeneratorComponent() {
     }
   };
 
-  // Start metronome
   const startMetronome = () => {
     if (!toneLoaded || !metronomeRef.current) return;
 
     try {
-      // Stop any existing metronome sequence
       if (metronomeSequenceRef.current) {
         metronomeSequenceRef.current.stop();
         metronomeSequenceRef.current.dispose();
       }
 
-      // Get time signature pattern
       const timeSignature = timeSignatures[state.timeSignature as keyof typeof timeSignatures];
-      
-      // Create metronome sequence with dynamic pattern
       metronomeSequenceRef.current = new window.Tone.Sequence(
         (time: number, note: string) => {
-          // Play metronome click with dynamic pitches
           metronomeRef.current.triggerAttackRelease(note, "32n", time);
         },
         timeSignature.pattern,
         timeSignature.noteValue
       );
 
-      // Set tempo
       window.Tone.Transport.bpm.value = state.tempo;
-      
-      // Start metronome
       metronomeSequenceRef.current.loop = true;
       metronomeSequenceRef.current.start();
-      
-      // Only start transport if it's not already running
+
       if (window.Tone.Transport.state !== "started") {
         window.Tone.Transport.start();
       }
@@ -527,7 +577,6 @@ export default function MelodyGeneratorComponent() {
     }
   };
 
-  // Stop metronome
   const stopMetronome = () => {
     try {
       if (metronomeSequenceRef.current) {
@@ -540,11 +589,10 @@ export default function MelodyGeneratorComponent() {
     }
   };
 
-  // Toggle metronome
   const toggleMetronome = () => {
     const newEnabled = !state.metronomeEnabled;
     setState(prev => ({ ...prev, metronomeEnabled: newEnabled }));
-    
+
     if (newEnabled) {
       startMetronome();
     } else {
@@ -552,30 +600,23 @@ export default function MelodyGeneratorComponent() {
     }
   };
 
-  // Generate initial melody on mount
   useEffect(() => {
     generateInitialMelody();
   }, []);
 
-  // Update note indicators when noteCount changes
   useEffect(() => {
-    // Skip initial mount - let generateInitialMelody handle first render
     if (state.generatedMelody.length === 0) return;
-    
     if (state.generatedMelody.length !== state.noteCount) {
-      // Use appropriate generator based on whether user has explicitly generated
       state.hasGeneratedMelody ? generateMelody() : generateInitialMelody();
     }
   }, [state.noteCount, state.hasGeneratedMelody]);
 
-  // Update metronome tempo when tempo changes
   useEffect(() => {
     if (state.metronomeEnabled && metronomeSequenceRef.current && window.Tone) {
       window.Tone.Transport.bpm.value = state.tempo;
     }
   }, [state.tempo, state.metronomeEnabled]);
 
-  // Restart metronome when time signature changes
   useEffect(() => {
     if (state.metronomeEnabled && toneLoaded) {
       stopMetronome();
@@ -586,15 +627,57 @@ export default function MelodyGeneratorComponent() {
   return (
     <div className="w-full max-w-2xl">
       {/* Header Section */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <h1 className="text-3xl font-semibold text-foreground mb-2">MELODY GENERATOR</h1>
         <p className="text-muted-foreground">Create beautiful melodies with simple controls</p>
+      </div>
+
+      {/* ===== MOVED: Control Buttons (now under the header) ===== */}
+      <div className="flex gap-4 mb-6">
+        <Button
+          variant="secondary"
+          onClick={generateMelody}
+          className="flex-1"
+          data-testid="button-generate"
+        >
+          Generate
+        </Button>
+
+        <Button
+          onClick={togglePlayback}
+          className={`flex-1 flex items-center justify-center gap-2 ${state.isPlaying ? 'play-button-loading' : ''}`}
+          disabled={!toneLoaded}
+          data-testid="button-play"
+        >
+          {state.isPlaying ? (
+            <>
+              <Square className="w-5 h-5" />
+              <span>Stop</span>
+            </>
+          ) : (
+            <>
+              <Play className="w-5 h-5" />
+              <span>Play</span>
+            </>
+          )}
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={exportMIDI}
+          className="flex items-center justify-center gap-2"
+          disabled={!toneLoaded || !state.hasGeneratedMelody}
+          data-testid="button-midi-export"
+        >
+          <Download className="w-4 h-4" />
+          <span>Download MIDI</span>
+        </Button>
       </div>
 
       {/* Main Control Panel */}
       <Card className="shadow-lg border border-border">
         <CardContent className="p-8 space-y-8">
-          
+
           {/* Tempo Control Section */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-foreground flex items-center justify-between">
@@ -627,8 +710,6 @@ export default function MelodyGeneratorComponent() {
 
           {/* Time Signature and Tempo Grid */}
           <div className="grid md:grid-cols-2 gap-6">
-            
-            {/* Time Signature Selection */}
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Time Signature</label>
               <Select 
@@ -648,16 +729,11 @@ export default function MelodyGeneratorComponent() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Placeholder for future controls */}
             <div></div>
-
           </div>
 
           {/* Scale and Key Selection */}
           <div className="grid md:grid-cols-2 gap-6">
-            
-            {/* Scale Selection */}
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Musical Scale</label>
               <Select 
@@ -681,7 +757,6 @@ export default function MelodyGeneratorComponent() {
               </Select>
             </div>
 
-            {/* Key Selection */}
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Key</label>
               <Select 
@@ -702,7 +777,6 @@ export default function MelodyGeneratorComponent() {
               </Select>
             </div>
 
-            {/* Sound Selection */}
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Sound</label>
               <Select 
@@ -722,7 +796,6 @@ export default function MelodyGeneratorComponent() {
                 </SelectContent>
               </Select>
             </div>
-
           </div>
 
           {/* Number of Notes Control */}
@@ -811,48 +884,6 @@ export default function MelodyGeneratorComponent() {
                 </span>
               </div>
             </div>
-          </div>
-
-          {/* Control Buttons */}
-          <div className="flex gap-4 pt-4">
-            <Button
-              variant="secondary"
-              onClick={generateMelody}
-              className="flex-1"
-              data-testid="button-generate"
-            >
-              Generate New Melody
-            </Button>
-            
-            <Button
-              onClick={togglePlayback}
-              className={`flex-1 flex items-center justify-center gap-2 ${state.isPlaying ? 'play-button-loading' : ''}`}
-              disabled={!toneLoaded}
-              data-testid="button-play"
-            >
-              {state.isPlaying ? (
-                <>
-                  <Square className="w-5 h-5" />
-                  <span>Stop</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5" />
-                  <span>Play</span>
-                </>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={exportMIDI}
-              className="flex items-center justify-center gap-2"
-              disabled={!toneLoaded || !state.hasGeneratedMelody}
-              data-testid="button-midi-export"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download MIDI</span>
-            </Button>
           </div>
 
           {/* Status Display */}
