@@ -464,6 +464,74 @@ export default function MelodyGeneratorComponent() {
     setStatus("Ready to generate melody");
   };
 
+  // New track-specific generation functions
+  const generateTrack = (trackType: 'bass' | 'melody' | 'harmony'): string[] => {
+    const scaleNotes = scales[state.scale as keyof typeof scales];
+    const baseNote = state.key;
+    const trackData = state.tracks[trackType];
+    const [minOctave, maxOctave] = trackData.octaveRange;
+    const baseWeights = scaleWeights[trackType][state.scale as keyof typeof scaleWeights[typeof trackType]] ?? Array(scaleNotes.length).fill(1);
+    const keyIndex = keys.indexOf(baseNote);
+    const sequence: string[] = [];
+
+    for (let i = 0; i < state.noteCount; i++) {
+      let currentWeights = baseWeights;
+      
+      // Apply stepwise bias for more musical progressions (especially for melody)
+      if (i > 0 && sequence[i - 1] && trackType === 'melody') {
+        currentWeights = applyStepwiseBias(
+          baseWeights, 
+          sequence[i - 1], 
+          scaleNotes, 
+          keyIndex, 
+          minOctave // Use the track's octave range
+        );
+      }
+      
+      const selectedScaleIndex = weightedRandomSelect(
+        scaleNotes.map((_, index) => index),
+        currentWeights
+      );
+      const semitone = scaleNotes[selectedScaleIndex];
+      const noteIndex = (keyIndex + semitone) % 12;
+      
+      // Choose octave within the track's range
+      const octave = trackType === 'bass' 
+        ? minOctave // Bass stays low
+        : Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+      
+      const newNote = keys[noteIndex] + octave;
+      sequence.push(newNote);
+    }
+
+    return sequence;
+  };
+
+  const generateAllTracks = () => {
+    setStatus("Generating all tracks...");
+
+    const newTracks = {
+      bass: generateTrack('bass'),
+      melody: generateTrack('melody'),
+      harmony: generateTrack('harmony')
+    };
+
+    setState(prev => ({
+      ...prev,
+      tracks: {
+        bass: { ...prev.tracks.bass, generatedSequence: newTracks.bass, hasGenerated: true, currentNoteIndex: -1 },
+        melody: { ...prev.tracks.melody, generatedSequence: newTracks.melody, hasGenerated: true, currentNoteIndex: -1 },
+        harmony: { ...prev.tracks.harmony, generatedSequence: newTracks.harmony, hasGenerated: true, currentNoteIndex: -1 }
+      },
+      // Mirror melody track to legacy fields for backward compatibility
+      generatedMelody: newTracks.melody,
+      currentNoteIndex: -1,
+      hasGeneratedMelody: true
+    }));
+
+    setStatus("All tracks generated! Ready to play.");
+  };
+
   const startPlayback = async () => {
     if (!toneLoaded || !synthRef.current) {
       setStatus("Audio engine not loaded yet. Please wait...");
