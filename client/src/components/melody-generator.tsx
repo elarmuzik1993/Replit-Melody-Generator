@@ -484,36 +484,138 @@ export default function MelodyGeneratorComponent() {
   };
 
   const exportMIDI = () => {
-    if (state.generatedMelody.length === 0) {
-      setStatus("Please generate a melody first!");
+    // Check if any tracks have been generated
+    const hasAnyTracks = state.tracks.bass.hasGenerated || 
+                        state.tracks.melody.hasGenerated || 
+                        state.tracks.harmony.hasGenerated;
+    
+    if (!hasAnyTracks) {
+      setStatus("Please generate at least one track first!");
       return;
     }
 
     try {
-      const track = new MidiWriter.Track();
-      track.setTempo(state.tempo);
-      const [numerator, denominator] = state.timeSignature.split('/').map(Number);
-      track.setTimeSignature(numerator, denominator, 24, 8);
-
-      state.generatedMelody.forEach((noteName) => {
-        const midiNote = noteToMidi(noteName);
-        const noteEvent = new MidiWriter.NoteEvent({
-          pitch: midiNote,
-          duration: '8',
-          velocity: 64
+      const tracks: MidiWriter.Track[] = [];
+      
+      // Create Bass track (if generated and enabled)
+      if (state.tracks.bass.hasGenerated && state.tracks.bass.isEnabled && state.tracks.bass.generatedSequence.length > 0) {
+        const bassTrack = new MidiWriter.Track();
+        bassTrack.setTempo(state.tempo);
+        const [numerator, denominator] = state.timeSignature.split('/').map(Number);
+        bassTrack.setTimeSignature(numerator, denominator, 24, 8);
+        
+        // Set MIDI channel 1 for bass
+        bassTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: 33, channel: 1 })); // Electric bass
+        
+        state.tracks.bass.generatedSequence.forEach((noteName) => {
+          if (noteName !== 'rest') {
+            const midiNote = noteToMidi(noteName);
+            const noteEvent = new MidiWriter.NoteEvent({
+              pitch: midiNote,
+              duration: '8',
+              velocity: 80, // Stronger velocity for bass
+              channel: 1
+            });
+            bassTrack.addEvent(noteEvent);
+          } else {
+            // Add proper rest
+            bassTrack.addEvent(new MidiWriter.NoteEvent({
+              duration: '8',
+              rest: true,
+              channel: 1
+            }));
+          }
         });
-        track.addEvent(noteEvent);
-      });
+        tracks.push(bassTrack);
+      }
 
-      const write = new MidiWriter.Writer(track);
+      // Create Melody track (if generated and enabled)
+      if (state.tracks.melody.hasGenerated && state.tracks.melody.isEnabled && state.tracks.melody.generatedSequence.length > 0) {
+        const melodyTrack = new MidiWriter.Track();
+        melodyTrack.setTempo(state.tempo);
+        const [numerator, denominator] = state.timeSignature.split('/').map(Number);
+        melodyTrack.setTimeSignature(numerator, denominator, 24, 8);
+        
+        // Set MIDI channel 2 for melody  
+        melodyTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: 1, channel: 2 })); // Acoustic Grand Piano
+        
+        state.tracks.melody.generatedSequence.forEach((noteName) => {
+          if (noteName !== 'rest') {
+            const midiNote = noteToMidi(noteName);
+            const noteEvent = new MidiWriter.NoteEvent({
+              pitch: midiNote,
+              duration: '8',
+              velocity: 70, // Medium velocity for melody
+              channel: 2
+            });
+            melodyTrack.addEvent(noteEvent);
+          } else {
+            // Add proper rest
+            melodyTrack.addEvent(new MidiWriter.NoteEvent({
+              duration: '8',
+              rest: true,
+              channel: 2
+            }));
+          }
+        });
+        tracks.push(melodyTrack);
+      }
+
+      // Create Harmony track (if generated and enabled)
+      if (state.tracks.harmony.hasGenerated && state.tracks.harmony.isEnabled && state.tracks.harmony.generatedSequence.length > 0) {
+        const harmonyTrack = new MidiWriter.Track();
+        harmonyTrack.setTempo(state.tempo);
+        const [numerator, denominator] = state.timeSignature.split('/').map(Number);
+        harmonyTrack.setTimeSignature(numerator, denominator, 24, 8);
+        
+        // Set MIDI channel 3 for harmony
+        harmonyTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: 89, channel: 3 })); // Pad 2 (warm)
+        
+        state.tracks.harmony.generatedSequence.forEach((noteName) => {
+          if (noteName !== 'rest') {
+            const midiNote = noteToMidi(noteName);
+            const noteEvent = new MidiWriter.NoteEvent({
+              pitch: midiNote,
+              duration: '8',
+              velocity: 50, // Softer velocity for harmony
+              channel: 3
+            });
+            harmonyTrack.addEvent(noteEvent);
+          } else {
+            // Add proper rest
+            harmonyTrack.addEvent(new MidiWriter.NoteEvent({
+              duration: '8',
+              rest: true,
+              channel: 3
+            }));
+          }
+        });
+        tracks.push(harmonyTrack);
+      }
+
+      if (tracks.length === 0) {
+        setStatus("No tracks available for export!");
+        return;
+      }
+
+      const write = new MidiWriter.Writer(tracks);
       const midiData = write.dataUri();
       const link = document.createElement('a');
       link.href = midiData;
-      link.download = `melody_${state.key}_${state.scale}_${state.tempo}bpm.mid`;
+      
+      // Create descriptive filename based on actually exported tracks
+      const trackNames = [];
+      if (state.tracks.bass.hasGenerated && state.tracks.bass.isEnabled && state.tracks.bass.generatedSequence.length > 0) trackNames.push('bass');
+      if (state.tracks.melody.hasGenerated && state.tracks.melody.isEnabled && state.tracks.melody.generatedSequence.length > 0) trackNames.push('melody');
+      if (state.tracks.harmony.hasGenerated && state.tracks.harmony.isEnabled && state.tracks.harmony.generatedSequence.length > 0) trackNames.push('harmony');
+      
+      link.download = `composition_${trackNames.join('-')}_${state.key}_${state.scale}_${state.tempo}bpm.mid`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setStatus("MIDI file downloaded successfully!");
+      
+      const trackCount = tracks.length;
+      setStatus(`MIDI file with ${trackCount} track${trackCount > 1 ? 's' : ''} downloaded successfully!`);
     } catch (error) {
       console.error('MIDI export error:', error);
       setStatus("Error exporting MIDI file. Please try again.");
