@@ -99,6 +99,109 @@ const scaleWeights = {
   }
 };
 
+// Chord progression helpers for harmony generation
+const chordProgressions = {
+  major: [
+    [0, 4, 2, 4], // I-V-iii-V
+    [0, 5, 3, 4], // I-vi-IV-V  
+    [0, 3, 5, 4], // I-IV-vi-V
+    [0, 2, 5, 4]  // I-iii-vi-V
+  ],
+  minor: [
+    [0, 6, 3, 6], // i-VII-iv-VII
+    [0, 5, 3, 6], // i-vi-iv-VII
+    [0, 2, 5, 6], // i-iii-vi-VII
+    [0, 3, 5, 4]  // i-iv-vi-v
+  ]
+};
+
+const getChordTones = (chordDegree: number, scale: number[], key: string): string[] => {
+  const keyIndex = keys.indexOf(key);
+  const chordTones = [];
+  
+  // Build triad: root, third, fifth
+  for (let interval of [0, 2, 4]) {
+    const scaleIndex = (chordDegree + interval) % scale.length;
+    const noteIndex = (keyIndex + scale[scaleIndex]) % 12;
+    chordTones.push(keys[noteIndex]);
+  }
+  
+  return chordTones;
+};
+
+const getComplementaryInterval = (melodyNote: string, chordTones: string[], octaveRange: [number, number], key: string, scale: string): string => {
+  const noteToPc = (n: string) => ({C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11})[n] ?? 0;
+  const name = melodyNote.slice(0, -1);
+  const melOct = parseInt(melodyNote.slice(-1), 10);
+  const melPc = noteToPc(name);
+  const melMidi = melPc + 12 * (melOct + 1); // match existing mapping
+
+  let best: {tone: string, octave: number} | null = null;
+  let bestScore = Infinity;
+  let bestNote: string | null = null;
+
+  // Search all chord tone + octave combinations
+  for (const tone of chordTones) {
+    const pc = noteToPc(tone);
+    for (let o = octaveRange[0]; o <= octaveRange[1]; o++) {
+      const midi = pc + 12 * (o + 1);
+      const d = Math.abs(midi - melMidi); // semitone distance
+
+      // primary objective: realize a 3rd (3 or 4 semitones)
+      const thirdGap = Math.min(Math.abs(d - 3), Math.abs(d - 4));
+      const isThird = d === 3 || d === 4;
+      const isSixth = d === 8 || d === 9; // inversion
+
+      // scoring: strong preference for true thirds, mild penalty for sixths, larger otherwise
+      const penalty = isThird ? 0 : isSixth ? 10 : 20;
+      const sizeBias = d; // tiny tie-breaker: smaller absolute interval
+      const score = penalty + thirdGap + 0.001 * sizeBias;
+
+      if (score < bestScore) {
+        bestScore = score;
+        best = { tone, octave: o };
+        bestNote = tone + String(o);
+      }
+    }
+  }
+
+  if (best && (bestScore < 10 || bestScore < 10.5)) { // realized 3rd or very-close
+    return bestNote!;
+  }
+
+  // Fallback 1: diatonic third from melody within range
+  const scaleSemis = scales[scale as keyof typeof scales];
+  if (scaleSemis) {
+    const keyPc = noteToPc(key);
+    const melScaleIdx = scaleSemis.findIndex(s => (keyPc + s) % 12 === melPc);
+    if (melScaleIdx !== -1) {
+      for (const step of [2, -2]) { // up third, then down third
+        const idx = (melScaleIdx + step + scaleSemis.length) % scaleSemis.length;
+        const targetPc = (keyPc + scaleSemis[idx]) % 12;
+        // search octaves for closest 3/4
+        let localBest: {pc: number, o: number} | null = null;
+        let localScore = Infinity; 
+        let localNote: string | null = null;
+        for (let o = octaveRange[0]; o <= octaveRange[1]; o++) {
+          const midi = targetPc + 12 * (o + 1);
+          const d = Math.abs(midi - melMidi);
+          const thirdGap = Math.min(Math.abs(d - 3), Math.abs(d - 4));
+          const score = thirdGap + 0.001 * d;
+          if (score < localScore) { 
+            localScore = score; 
+            localBest = { pc: targetPc, o }; 
+            localNote = keys[targetPc] + String(o); 
+          }
+        }
+        if (localBest && localScore <= 0.5) return localNote!; // close to perfect third
+      }
+    }
+  }
+
+  // Fallback 2: best chord tone even if it's a sixth or closest
+  return bestNote ?? chordTones[0] + String(octaveRange[0]);
+};
+
 const synthPresets = {
   basic: {
     name: "Basic Synth",
@@ -465,27 +568,73 @@ export default function MelodyGeneratorComponent() {
   };
 
   // New track-specific generation functions
-  const generateTrack = (trackType: 'bass' | 'melody' | 'harmony'): string[] => {
+  const generateTrack = (trackType: 'bass' | 'melody' | 'harmony', melodySequence?: string[]): string[] => {
     const scaleNotes = scales[state.scale as keyof typeof scales];
     const baseNote = state.key;
     const trackData = state.tracks[trackType];
     const [minOctave, maxOctave] = trackData.octaveRange;
-    const baseWeights = scaleWeights[trackType][state.scale as keyof typeof scaleWeights[typeof trackType]] ?? Array(scaleNotes.length).fill(1);
     const keyIndex = keys.indexOf(baseNote);
     const sequence: string[] = [];
 
+    // Special handling for harmony with chord progressions
+    if (trackType === 'harmony') {
+      const scaleType = state.scale === 'major' || state.scale === 'pentatonic' ? 'major' : 'minor';
+      const progressions = chordProgressions[scaleType] || chordProgressions.major;
+      const selectedProgression = progressions[Math.floor(Math.random() * progressions.length)];
+      
+      // Calculate notes per chord (distribute noteCount across progression)
+      const notesPerChord = Math.ceil(state.noteCount / selectedProgression.length);
+      
+      for (let i = 0; i < state.noteCount; i++) {
+        const chordIndex = Math.floor(i / notesPerChord) % selectedProgression.length;
+        const currentChord = selectedProgression[chordIndex];
+        const chordTones = getChordTones(currentChord, scaleNotes, baseNote);
+        
+        let harmonryNote: string;
+        
+        let harmonyNote: string;
+        
+        // If we have melody, try to create complementary intervals
+        if (melodySequence && i < melodySequence.length) {
+          const melodyNote = melodySequence[i];
+          harmonyNote = getComplementaryInterval(melodyNote, chordTones, [minOctave, maxOctave], baseNote, state.scale);
+        } else {
+          // Otherwise, use chord tones with sustain logic
+          if (i > 0 && Math.random() < 0.4) {
+            // 40% chance to sustain previous note for pad effect (reuse exact note)
+            harmonyNote = sequence[i - 1];
+          } else {
+            const chordTone = chordTones[Math.floor(Math.random() * chordTones.length)];
+            const octave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+            harmonyNote = chordTone + octave;
+          }
+        }
+        
+        sequence.push(harmonyNote);
+      }
+      
+      return sequence;
+    }
+
+    // For melody and bass, use the existing logic
+    const baseWeights = scaleWeights[trackType][state.scale as keyof typeof scaleWeights[typeof trackType]] ?? Array(scaleNotes.length).fill(1);
+    
     for (let i = 0; i < state.noteCount; i++) {
       let currentWeights = baseWeights;
       
-      // Apply stepwise bias for more musical progressions (especially for melody)
-      if (i > 0 && sequence[i - 1] && trackType === 'melody') {
-        currentWeights = applyStepwiseBias(
-          baseWeights, 
-          sequence[i - 1], 
-          scaleNotes, 
-          keyIndex, 
-          minOctave // Use the track's octave range
-        );
+      // Apply track-specific musical logic
+      if (i > 0 && sequence[i - 1]) {
+        if (trackType === 'melody') {
+          // Apply stepwise bias for more musical progressions
+          currentWeights = applyStepwiseBias(
+            baseWeights, 
+            sequence[i - 1], 
+            scaleNotes, 
+            keyIndex, 
+            minOctave
+          );
+        }
+        // Bass uses its weights as-is for strong root/fifth emphasis
       }
       
       const selectedScaleIndex = weightedRandomSelect(
@@ -510,21 +659,20 @@ export default function MelodyGeneratorComponent() {
   const generateAllTracks = () => {
     setStatus("Generating all tracks...");
 
-    const newTracks = {
-      bass: generateTrack('bass'),
-      melody: generateTrack('melody'),
-      harmony: generateTrack('harmony')
-    };
+    // Generate in order: bass, melody, then harmony (so harmony can reference melody)
+    const bassTrack = generateTrack('bass');
+    const melodyTrack = generateTrack('melody');
+    const harmonyTrack = generateTrack('harmony', melodyTrack); // Pass melody for complementary intervals
 
     setState(prev => ({
       ...prev,
       tracks: {
-        bass: { ...prev.tracks.bass, generatedSequence: newTracks.bass, hasGenerated: true, currentNoteIndex: -1 },
-        melody: { ...prev.tracks.melody, generatedSequence: newTracks.melody, hasGenerated: true, currentNoteIndex: -1 },
-        harmony: { ...prev.tracks.harmony, generatedSequence: newTracks.harmony, hasGenerated: true, currentNoteIndex: -1 }
+        bass: { ...prev.tracks.bass, generatedSequence: bassTrack, hasGenerated: true, currentNoteIndex: -1 },
+        melody: { ...prev.tracks.melody, generatedSequence: melodyTrack, hasGenerated: true, currentNoteIndex: -1 },
+        harmony: { ...prev.tracks.harmony, generatedSequence: harmonyTrack, hasGenerated: true, currentNoteIndex: -1 }
       },
       // Mirror melody track to legacy fields for backward compatibility
-      generatedMelody: newTracks.melody,
+      generatedMelody: melodyTrack,
       currentNoteIndex: -1,
       hasGeneratedMelody: true
     }));
