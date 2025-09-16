@@ -1508,7 +1508,7 @@ export default function MelodyGeneratorComponent() {
       <div className="mt-8 text-center">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-muted rounded-full text-xs text-muted-foreground">
           <Info className="w-4 h-4" />
-          Powered by ELAR MUSIC • Click Generate to create a new melody
+          Powered by ELAR MUSIC DEVELOPMENTS • Click Generate to create a new melody
         </div>
       </div>
     </div>
