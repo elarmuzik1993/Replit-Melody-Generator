@@ -8,22 +8,22 @@ export default defineConfig({
   root: ".", // index.html is in project root
   base: "/Replit-Melody-Generator/", // GitHub Pages base path
   build: {
-    outDir: path.resolve(__dirname, "dist"), // build output folder
+    outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
     rollupOptions: {
-      input: path.resolve(__dirname, "index.html"), // point to root index.html
+      input: path.resolve(__dirname, "index.html"),
     },
   },
   plugins: [
     react(),
     runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" && process.env.REPL_ID !== undefined
-      ? [await import("@replit/vite-plugin-cartographer").then((m) => m.cartographer())]
+    ...(process.env.NODE_ENV !== "production" && process.env.REPL_ID
+      ? [cartographer()]
       : []),
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "client/src"), // main.tsx is here
+      "@": path.resolve(__dirname, "client/src"),
       "@shared": path.resolve(__dirname, "shared"),
       "@assets": path.resolve(__dirname, "attached_assets"),
     },
