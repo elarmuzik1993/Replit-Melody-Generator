@@ -21,4 +21,4 @@ export default defineConfig(({ mode }) => ({
       "@assets": path.resolve(__dirname, "attached_assets"),
     },
   },
-});
+}));
