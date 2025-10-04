@@ -1,6 +1,7 @@
 language = "nodejs"
 run = "npm run build && npm start"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+modules = ["nodejs-20"]
 
 [deployment]
 deploymentTarget = "autoscale"
