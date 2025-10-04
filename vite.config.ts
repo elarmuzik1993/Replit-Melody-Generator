@@ -4,7 +4,15 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
-  base: "/Replit-Melody-Generator/", // <-- important for GitHub Pages
+  root: ".", // index.html is in project root
+  base: "/Replit-Melody-Generator/", // GitHub Pages base path
+  build: {
+    outDir: path.resolve(__dirname, "dist"), // build output folder
+    emptyOutDir: true,
+    rollupOptions: {
+      input: path.resolve(__dirname, "index.html"), // entry HTML
+    },
+  },
   plugins: [
     react(),
     runtimeErrorOverlay(),
@@ -19,15 +27,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      "@": path.resolve(__dirname, "client/src"),
+      "@shared": path.resolve(__dirname, "shared"),
+      "@assets": path.resolve(__dirname, "attached_assets"),
     },
-  },
-  root: path.resolve(import.meta.dirname, "client"),
-  build: {
-    outDir: path.resolve(import.meta.dirname, "dist"), // <-- simpler for deployment
-    emptyOutDir: true,
   },
   server: {
     fs: {
