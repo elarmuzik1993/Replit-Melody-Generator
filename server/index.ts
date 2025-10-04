@@ -51,6 +51,14 @@ app.use((req, res, next) => {
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
+    // Strip the GitHub Pages base path prefix in development
+    // so Vite middleware can serve assets correctly
+    app.use((req, _res, next) => {
+      if (req.url.startsWith("/Replit-Melody-Generator/")) {
+        req.url = req.url.replace("/Replit-Melody-Generator", "");
+      }
+      next();
+    });
     await setupVite(app, server);
   } else {
     serveStatic(app);
