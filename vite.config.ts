@@ -11,19 +11,19 @@ export default defineConfig({
     outDir: path.resolve(__dirname, "dist"), // build output folder
     emptyOutDir: true,
     rollupOptions: {
-      input: path.resolve(__dirname, "index.html"), // entry HTML
+      input: path.resolve(__dirname, "index.html"), // point to root index.html
     },
   },
   plugins: [
     react(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" && process.env.REPL_ID !== undefined
-      ? [cartographer()]
+      ? [await import("@replit/vite-plugin-cartographer").then((m) => m.cartographer())]
       : []),
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "client/src"),
+      "@": path.resolve(__dirname, "client/src"), // main.tsx is here
       "@shared": path.resolve(__dirname, "shared"),
       "@assets": path.resolve(__dirname, "attached_assets"),
     },
