@@ -14,6 +14,38 @@ declare global {
   }
 }
 
+// Declare MidiWriter types
+declare namespace MidiWriter {
+  class Track {
+    setTempo(tempo: number): void;
+    setTimeSignature(numerator: number, denominator: number, clocks?: number, notes?: number): void;
+    addEvent(event: any): void;
+  }
+  
+  class NoteEvent {
+    constructor(options: {
+      pitch?: number | number[];
+      duration?: string;
+      velocity?: number;
+      channel?: number;
+      rest?: boolean;
+    });
+  }
+  
+  class ProgramChangeEvent {
+    constructor(options: {
+      instrument: number;
+      channel: number;
+    });
+  }
+  
+  class Writer {
+    constructor(tracks: Track[]);
+    buildFile(): Uint8Array;
+    dataUri(): string;
+  }
+}
+
 interface TrackData {
   generatedSequence: string[];
   isEnabled: boolean;
