@@ -5,13 +5,13 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import cartographer from "@replit/vite-plugin-cartographer"; // import normally
 
 export default defineConfig({
-  root: ".", // index.html is in project root
-  base: "/Replit-Melody-Generator/", // GitHub Pages base path
+  root: ".", // <-- root is project root where index.html lives
+  base: "/Replit-Melody-Generator/",
   build: {
     outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
     rollupOptions: {
-      input: path.resolve(__dirname, "index.html"),
+      input: path.resolve(__dirname, "index.html"), // <-- index.html in root
     },
   },
   plugins: [
@@ -23,7 +23,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "client/src"),
+      "@": path.resolve(__dirname, "client/src"), // main.tsx is here
       "@shared": path.resolve(__dirname, "shared"),
       "@assets": path.resolve(__dirname, "attached_assets"),
     },
