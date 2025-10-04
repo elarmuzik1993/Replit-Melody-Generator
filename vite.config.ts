@@ -6,9 +6,9 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: "client",
-  base: "/Replit-Melody-Generator/",
+  base: mode === "production" ? "/Replit-Melody-Generator/" : "/",
   build: {
     outDir: "../dist",
     emptyOutDir: true,
