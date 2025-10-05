@@ -6,7 +6,8 @@
   "homepage": "https://elarmuzik1993.github.io/Replit-Melody-Generator",
   "scripts": {
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist",
+    "deploy": "gh-pages -d dist/public",
+    "build:frontend": "vite build",
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "npx vite build && npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
