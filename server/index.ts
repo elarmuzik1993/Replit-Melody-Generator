@@ -53,6 +53,13 @@ app.use((req, res, next) => {
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
+    // Handle GitHub Pages base path for Replit
+    app.use((req, res, next) => {
+      if (req.url.startsWith('/Replit-Melody-Generator/')) {
+        req.url = req.url.replace('/Replit-Melody-Generator', '');
+      }
+      next();
+    });
     serveStatic(app);
   }
 

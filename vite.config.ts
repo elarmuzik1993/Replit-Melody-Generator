@@ -10,7 +10,7 @@ export default defineConfig({
   root: "client",
   base: "/Replit-Melody-Generator/",
   build: {
-    outDir: "../dist",
+    outDir: "../dist/public",  // 👈 put build inside dist/public
     emptyOutDir: true,
   },
   plugins: [react()],

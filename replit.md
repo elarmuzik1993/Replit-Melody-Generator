@@ -2,6 +2,14 @@
 
 This is a melody generator web application built with React and Node.js. The app allows users to create musical melodies by configuring parameters like tempo, scale, key, and note count. It uses Tone.js for audio synthesis and playback, providing an interactive music creation experience in the browser.
 
+# Recent Changes
+
+**October 5, 2025**: Fixed blank screen issue on Replit preview
+- Added middleware in `server/index.ts` to handle GitHub Pages base path (`/Replit-Melody-Generator/`)
+- The middleware strips the GitHub Pages prefix from incoming requests in production mode
+- This allows the same build to work on both Replit (root path) and GitHub Pages (with base path)
+- Verified application loads correctly with end-to-end testing
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -22,6 +30,7 @@ Preferred communication style: Simple, everyday language.
 - **Static Serving**: Production builds served as static files
 - **API Structure**: RESTful API endpoints prefixed with `/api`
 - **Error Handling**: Centralized error handling middleware
+- **Dual Deployment Support**: Middleware handles both Replit (root path) and GitHub Pages (with base path) deployments
 
 ## Data Storage
 - **Database**: PostgreSQL with Neon Database serverless connection
