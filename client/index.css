@@ -1,103 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: hsl(0, 0%, 100%);
-  --foreground: hsl(0, 0%, 0%);
-  --card: hsl(0, 0%, 96.47%);
-  --card-foreground: hsl(0, 0%, 0%);
-  --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(0, 0%, 0%);
-  --primary: hsl(96, 85.19%, 73.53%);
-  --primary-foreground: hsl(0, 0%, 0%);
-  --secondary: hsl(0, 0%, 0%);
-  --secondary-foreground: hsl(0, 0%, 100%);
-  --muted: hsl(0, 0%, 96.08%);
-  --muted-foreground: hsl(0, 0%, 52.94%);
-  --accent: hsl(254.21, 100%, 92.55%);
-  --accent-foreground: hsl(0, 0%, 0%);
-  --destructive: hsl(2.04, 74.62%, 61.37%);
-  --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(0, 0%, 96.47%);
-  --input: hsl(0, 0%, 0%);
-  --ring: hsl(0, 0%, 0%);
-  --chart-1: hsl(203.8863 88.2845% 53.1373%);
-  --chart-2: hsl(159.7826 100% 36.0784%);
-  --chart-3: hsl(42.0290 92.8251% 56.2745%);
-  --chart-4: hsl(147.1429 78.5047% 41.9608%);
-  --chart-5: hsl(341.4894 75.2000% 50.9804%);
-  --sidebar: hsl(180 6.6667% 97.0588%);
-  --sidebar-foreground: hsl(210 25% 7.8431%);
-  --sidebar-primary: hsl(203.8863 88.2845% 53.1373%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(211.5789 51.3514% 92.7451%);
-  --sidebar-accent-foreground: hsl(203.8863 88.2845% 53.1373%);
-  --sidebar-border: hsl(205.0000 25.0000% 90.5882%);
-  --sidebar-ring: hsl(202.8169 89.1213% 53.1373%);
-  --font-sans: 'Inter', sans-serif;
-  --font-serif: 'Geist', sans-serif;
-  --font-mono: 'Geist', sans-serif;
+  /* Monolit Beatz - Red, Black & Silver Color Palette */
+  --primary-red: #cc0000;
+  --accent-red: #e60000;
+  --dark-bg: #0a0a0a;
+  --darker-bg: #000000;
+  --card-bg: #1a1a1a;
+  --silver: #c0c0c0;
+  --gray-text: #999999;
+  --light-text: #ffffff;
+
+  /* Converted to HSL for Tailwind compatibility */
+  --background: 0 0% 3.9%;  /* #0a0a0a */
+  --foreground: 0 0% 100%;  /* #ffffff */
+  --card: 0 0% 10%;  /* #1a1a1a */
+  --card-foreground: 0 0% 100%;  /* #ffffff */
+  --popover: 0 0% 0%;  /* #000000 */
+  --popover-foreground: 0 0% 100%;  /* #ffffff */
+  --primary: 0 100% 40%;  /* #cc0000 */
+  --primary-foreground: 0 0% 100%;  /* #ffffff */
+  --secondary: 0 0% 75.3%;  /* #c0c0c0 */
+  --secondary-foreground: 0 0% 0%;  /* #000000 */
+  --muted: 0 0% 10%;  /* #1a1a1a */
+  --muted-foreground: 0 0% 60%;  /* #999999 */
+  --accent: 0 100% 45%;  /* #e60000 */
+  --accent-foreground: 0 0% 100%;  /* #ffffff */
+  --destructive: 0 100% 40%;  /* #cc0000 */
+  --destructive-foreground: 0 0% 100%;  /* #ffffff */
+  --border: 0 100% 40% / 0.3;  /* rgba(204, 0, 0, 0.3) */
+  --input: 0 0% 10%;  /* #1a1a1a */
+  --ring: 0 100% 40%;  /* #cc0000 */
+  --chart-1: 0 100% 40%;
+  --chart-2: 0 100% 45%;
+  --chart-3: 0 0% 75.3%;
+  --chart-4: 0 0% 60%;
+  --chart-5: 0 0% 40%;
+  --sidebar: 0 0% 10%;
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-primary: 0 100% 40%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 10%;
+  --sidebar-accent-foreground: 0 100% 40%;
+  --sidebar-border: 0 100% 40% / 0.2;
+  --sidebar-ring: 0 100% 40%;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-mono: 'Geist', monospace;
   --radius: 0rem;
-  --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 2px 4px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 4px 6px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --tracking-normal: 0em;
+  --shadow-2xs: 0 2px 8px rgba(204, 0, 0, 0.2);
+  --shadow-xs: 0 4px 12px rgba(204, 0, 0, 0.25);
+  --shadow-sm: 0 5px 15px rgba(204, 0, 0, 0.3);
+  --shadow: 0 10px 30px rgba(204, 0, 0, 0.4);
+  --shadow-md: 0 15px 40px rgba(204, 0, 0, 0.5);
+  --shadow-lg: 0 20px 50px rgba(204, 0, 0, 0.6);
+  --shadow-xl: 0 25px 60px rgba(204, 0, 0, 0.7);
+  --shadow-2xl: 0 30px 80px rgba(204, 0, 0, 0.8);
+  --tracking-normal: -0.01em;
   --spacing: 0.25rem;
 }
 
 .dark {
-  --background: hsl(0 0% 0%);
-  --foreground: hsl(200 6.6667% 91.1765%);
-  --card: hsl(228 9.8039% 10%);
-  --card-foreground: hsl(0 0% 85.0980%);
-  --popover: hsl(0 0% 0%);
-  --popover-foreground: hsl(200 6.6667% 91.1765%);
-  --primary: hsl(203.7736 87.6033% 52.5490%);
-  --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(195.0000 15.3846% 94.9020%);
-  --secondary-foreground: hsl(210 25% 7.8431%);
-  --muted: hsl(0 0% 9.4118%);
-  --muted-foreground: hsl(210 3.3898% 46.2745%);
-  --accent: hsl(205.7143 70% 7.8431%);
-  --accent-foreground: hsl(203.7736 87.6033% 52.5490%);
-  --destructive: hsl(356.3033 90.5579% 54.3137%);
-  --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(210 5.2632% 14.9020%);
-  --input: hsl(207.6923 27.6596% 18.4314%);
-  --ring: hsl(202.8169 89.1213% 53.1373%);
-  --chart-1: hsl(203.8863 88.2845% 53.1373%);
-  --chart-2: hsl(159.7826 100% 36.0784%);
-  --chart-3: hsl(42.0290 92.8251% 56.2745%);
-  --chart-4: hsl(147.1429 78.5047% 41.9608%);
-  --chart-5: hsl(341.4894 75.2000% 50.9804%);
-  --sidebar: hsl(228 9.8039% 10%);
-  --sidebar-foreground: hsl(0 0% 85.0980%);
-  --sidebar-primary: hsl(202.8169 89.1213% 53.1373%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(205.7143 70% 7.8431%);
-  --sidebar-accent-foreground: hsl(203.7736 87.6033% 52.5490%);
-  --sidebar-border: hsl(205.7143 15.7895% 26.0784%);
-  --sidebar-ring: hsl(202.8169 89.1213% 53.1373%);
-  --font-sans: Open Sans, sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
-  --radius: 1.3rem;
-  --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 2px 4px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 4px 6px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
+  /* Dark mode uses same colors as root for Monolit Beatz theme */
+  --background: 0 0% 3.9%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 10%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 0%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 0 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 75.3%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 60%;
+  --accent: 0 100% 45%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 100% 40% / 0.3;
+  --input: 0 0% 10%;
+  --ring: 0 100% 40%;
+  --chart-1: 0 100% 40%;
+  --chart-2: 0 100% 45%;
+  --chart-3: 0 0% 75.3%;
+  --chart-4: 0 0% 60%;
+  --chart-5: 0 0% 40%;
+  --sidebar: 0 0% 10%;
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-primary: 0 100% 40%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 10%;
+  --sidebar-accent-foreground: 0 100% 40%;
+  --sidebar-border: 0 100% 40% / 0.2;
+  --sidebar-ring: 0 100% 40%;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-mono: 'Geist', monospace;
+  --radius: 0rem;
+  --shadow-2xs: 0 2px 8px rgba(204, 0, 0, 0.2);
+  --shadow-xs: 0 4px 12px rgba(204, 0, 0, 0.25);
+  --shadow-sm: 0 5px 15px rgba(204, 0, 0, 0.3);
+  --shadow: 0 10px 30px rgba(204, 0, 0, 0.4);
+  --shadow-md: 0 15px 40px rgba(204, 0, 0, 0.5);
+  --shadow-lg: 0 20px 50px rgba(204, 0, 0, 0.6);
+  --shadow-xl: 0 25px 60px rgba(204, 0, 0, 0.7);
+  --shadow-2xl: 0 30px 80px rgba(204, 0, 0, 0.8);
   --spacing: 0.25rem;
-  --tracking-normal: 0em;
+  --tracking-normal: -0.01em;
 }
 
 @layer base {
@@ -110,37 +124,94 @@
   }
 }
 
+/* Custom Slider Styling - Monolit Beatz Theme */
 .slider-thumb::-webkit-slider-thumb {
   appearance: none;
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: hsl(var(--primary));
+  background: #cc0000;
   cursor: pointer;
   border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 0 10px rgba(204, 0, 0, 0.6), 0 2px 4px rgba(0,0,0,0.3);
+  transition: all 0.3s ease;
+}
+
+.slider-thumb::-webkit-slider-thumb:hover {
+  background: #e60000;
+  box-shadow: 0 0 20px rgba(230, 0, 0, 0.8), 0 4px 8px rgba(0,0,0,0.4);
+  transform: scale(1.1);
 }
 
 .slider-thumb::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: hsl(var(--primary));
+  background: #cc0000;
   cursor: pointer;
   border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.note-indicator {
+  box-shadow: 0 0 10px rgba(204, 0, 0, 0.6), 0 2px 4px rgba(0,0,0,0.3);
   transition: all 0.3s ease;
-  transform: scale(1);
 }
 
-.note-indicator.active {
-  background-color: hsl(var(--accent)) !important;
+.slider-thumb::-moz-range-thumb:hover {
+  background: #e60000;
+  box-shadow: 0 0 20px rgba(230, 0, 0, 0.8), 0 4px 8px rgba(0,0,0,0.4);
   transform: scale(1.1);
 }
 
+/* Note Indicator Animation */
+.note-indicator {
+  transition: all 0.3s ease;
+  transform: scale(1);
+  border: 2px solid rgba(204, 0, 0, 0.3);
+}
+
+.note-indicator.active {
+  background-color: #e60000 !important;
+  transform: scale(1.1);
+  border-color: #cc0000;
+  box-shadow: 0 0 15px rgba(230, 0, 0, 0.6), 0 0 30px rgba(204, 0, 0, 0.4);
+}
+
+/* Button Loading Animation */
 .play-button-loading {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Monolit Beatz Style Enhancements */
+.card {
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(10, 10, 10, 0.95) 100%);
+  border: 2px solid rgba(204, 0, 0, 0.3);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover {
+  border-color: rgba(204, 0, 0, 0.6);
+  box-shadow: 0 0 40px rgba(204, 0, 0, 0.4), 0 20px 40px rgba(0, 0, 0, 0.9);
+  transform: translateY(-4px);
+}
+
+/* Red Glow Text Effect */
+.text-primary {
+  text-shadow: 0 0 20px rgba(204, 0, 0, 0.4);
+}
+
+/* Hover Effects for Interactive Elements */
+button:hover, .button:hover {
+  box-shadow: 0 0 20px rgba(204, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
 }
