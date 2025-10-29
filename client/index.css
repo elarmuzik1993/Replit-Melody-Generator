@@ -121,12 +121,14 @@
 
   html {
     background-color: #0a0a0a;
+    color: #ffffff;
     min-height: 100%;
   }
 
   body {
-    @apply font-sans antialiased text-foreground;
+    @apply font-sans antialiased;
     background-color: #0a0a0a !important;
+    color: #ffffff !important;
     min-height: 100vh;
     margin: 0;
     padding: 0;
@@ -135,10 +137,61 @@
   #root {
     min-height: 100vh;
     background-color: #0a0a0a;
+    color: #ffffff;
+  }
+
+  /* Ensure all text elements are visible */
+  h1, h2, h3, h4, h5, h6, p, span, div, button, label, input, select {
+    color: inherit;
   }
 }
 
 /* Custom Slider Styling - Monolit Beatz Theme */
+
+/* Target all possible slider track elements */
+[data-radix-slider-track],
+[role="slider"] ~ *,
+.bg-secondary {
+  background-color: rgba(192, 192, 192, 0.5) !important;
+  border: 1px solid rgba(192, 192, 192, 0.7) !important;
+  height: 8px !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Radix UI Slider Range (filled part) */
+[data-radix-slider-range],
+.bg-primary {
+  background-color: #cc0000 !important;
+  box-shadow: 0 0 10px rgba(204, 0, 0, 0.6) !important;
+}
+
+/* Radix UI Slider Thumb - target multiple selectors */
+[data-radix-slider-thumb],
+[role="slider"],
+span[class*="rounded-full"][class*="border"] {
+  width: 20px !important;
+  height: 20px !important;
+  background-color: #cc0000 !important;
+  border: 3px solid #ffffff !important;
+  box-shadow: 0 0 15px rgba(204, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  transition: all 0.3s ease !important;
+  cursor: grab !important;
+}
+
+[data-radix-slider-thumb]:hover,
+[role="slider"]:hover {
+  background-color: #e60000 !important;
+  box-shadow: 0 0 25px rgba(230, 0, 0, 1), 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+  transform: scale(1.15) !important;
+}
+
+[data-radix-slider-thumb]:active,
+[role="slider"]:active {
+  cursor: grabbing !important;
+  transform: scale(1.05) !important;
+}
+
+/* Legacy slider styling for non-Radix sliders */
 .slider-thumb::-webkit-slider-thumb {
   appearance: none;
   width: 20px;
@@ -228,4 +281,41 @@ button:hover, .button:hover {
 /* Smooth Scrolling */
 html {
   scroll-behavior: smooth;
+}
+
+/* Dropdown and Popover Styling - Monolit Beatz Theme */
+[role="listbox"],
+[role="menu"],
+[data-radix-select-content],
+[data-radix-dropdown-menu-content],
+[data-radix-popover-content] {
+  background-color: #1a1a1a !important;
+  border: 2px solid rgba(204, 0, 0, 0.4) !important;
+  box-shadow: 0 10px 40px rgba(204, 0, 0, 0.5), 0 0 80px rgba(0, 0, 0, 0.9) !important;
+  color: #ffffff !important;
+}
+
+/* Dropdown Items */
+[role="option"],
+[data-radix-select-item],
+[data-radix-dropdown-menu-item] {
+  background-color: transparent !important;
+  color: #ffffff !important;
+  transition: all 0.3s ease;
+}
+
+[role="option"]:hover,
+[data-radix-select-item]:hover,
+[data-radix-dropdown-menu-item]:hover,
+[role="option"][data-highlighted],
+[data-radix-select-item][data-highlighted],
+[data-radix-dropdown-menu-item][data-highlighted] {
+  background-color: rgba(204, 0, 0, 0.2) !important;
+  color: #cc0000 !important;
+}
+
+[role="option"][data-state="checked"],
+[data-radix-select-item][data-state="checked"] {
+  background-color: rgba(204, 0, 0, 0.3) !important;
+  color: #e60000 !important;
 }

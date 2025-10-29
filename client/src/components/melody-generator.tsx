@@ -27,6 +27,7 @@ interface TrackData {
 interface MultiTrackState {
   // Global settings (shared across tracks)
   tempo: number;
+  masterVolume: number;
   key: string;
   scale: string;
   timeSignature: string;
@@ -203,93 +204,364 @@ const getComplementaryInterval = (melodyNote: string, chordTones: string[], octa
 };
 
 const synthPresets = {
-  basic: {
-    name: "Basic Synth",
-    config: () => new window.Tone.Synth().toDestination()
+  // Melody synths - Enhanced
+  electric_piano: {
+    name: "Electric Piano",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 3.5,
+        modulationIndex: 12,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.008,
+          decay: 1.0,
+          sustain: 0.4,
+          release: 1.5
+        },
+        modulation: { type: "sine" },
+        modulationEnvelope: {
+          attack: 0.002,
+          decay: 0.4,
+          sustain: 0.3,
+          release: 0.9
+        }
+      }).toDestination();
+      synth.volume.value = -8;
+      return synth;
+    }
   },
-    electric_piano: {
-      name: "Electric Piano",
-      config: () =>
-        new window.Tone.FMSynth({
-          harmonicity: 3, // ratio between carrier & modulator
-          modulationIndex: 10, // amount of modulation (brightness)
-          oscillator: {
-            type: "sine"
-          },
-          envelope: {
-            attack: 0.01,
-            decay: 1.2,
-            sustain: 0.3,
-            release: 1.8
-          },
-          modulation: {
-            type: "sine"
-          },
-          modulationEnvelope: {
-            attack: 0.002,
-            decay: 0.3,
-            sustain: 0.2,
-            release: 0.8
-          }
-        }).toDestination()
+  pluck: {
+    name: "Pluck",
+    config: () => {
+      const synth = new window.Tone.PluckSynth({
+        attackNoise: 1.5,
+        dampening: 3000,
+        resonance: 0.92
+      }).toDestination();
+      synth.volume.value = -6;
+      return synth;
+    }
   },
-  sawtooth: {
-    name: "Sawtooth Wave",
-    config: () => new window.Tone.Synth({
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
-    }).toDestination()
-  },
-  square: {
-    name: "Square Wave",
-    config: () => new window.Tone.Synth({
-      oscillator: { type: "square" },
-      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
-    }).toDestination()
-  },
-  sine: {
-    name: "Sine Wave",
-    config: () => new window.Tone.Synth({
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
-    }).toDestination()
-  },
-  bell: {
-    name: "Bell",
-    config: () =>
-      new window.Tone.FMSynth({
-        harmonicity: 5,          // wide spacing between carrier & modulator
-        modulationIndex: 12,     // controls brightness/clang
+  marimba: {
+    name: "Marimba",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 8,
+        modulationIndex: 4,
         oscillator: { type: "sine" },
         envelope: {
           attack: 0.001,
-          decay: 3.5,
+          decay: 2.0,
           sustain: 0.1,
-          release: 4
+          release: 2.5
         },
         modulation: { type: "sine" },
         modulationEnvelope: {
           attack: 0.001,
-          decay: 2.5,
+          decay: 1.5,
           sustain: 0,
-          release: 3
+          release: 2.0
         }
-      }).toDestination()
+      }).toDestination();
+      synth.volume.value = -10;
+      return synth;
+    }
   },
-  // Bass synths
+  bell: {
+    name: "Bell",
+    config: () => {
+      const synth = new window.Tone.MetalSynth({
+        harmonicity: 12,
+        resonance: 800,
+        modulationIndex: 20,
+        envelope: {
+          attack: 0.001,
+          decay: 1.4,
+          release: 3.0
+        },
+        volume: -15
+      }).toDestination();
+      return synth;
+    }
+  },
+  lead_synth: {
+    name: "Lead Synth",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "sawtooth"
+        },
+        filter: {
+          Q: 6,
+          type: "lowpass",
+          rolloff: -24,
+          frequency: 3000
+        },
+        envelope: {
+          attack: 0.01,
+          decay: 0.3,
+          sustain: 0.6,
+          release: 0.8
+        },
+        filterEnvelope: {
+          attack: 0.02,
+          decay: 0.4,
+          sustain: 0.5,
+          release: 1.0,
+          baseFrequency: 800,
+          octaves: 3.5
+        }
+      }).toDestination();
+      synth.volume.value = -9;
+      return synth;
+    }
+  },
+  square_lead: {
+    name: "Square Lead",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "square"
+        },
+        filter: {
+          Q: 4,
+          type: "lowpass",
+          rolloff: -12,
+          frequency: 2500
+        },
+        envelope: {
+          attack: 0.005,
+          decay: 0.2,
+          sustain: 0.7,
+          release: 0.6
+        },
+        filterEnvelope: {
+          attack: 0.01,
+          decay: 0.3,
+          sustain: 0.6,
+          release: 0.8,
+          baseFrequency: 600,
+          octaves: 3
+        }
+      }).toDestination();
+      synth.volume.value = -10;
+      return synth;
+    }
+  },
+  ambient_keys: {
+    name: "Ambient Keys",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 2.5,
+        modulationIndex: 6,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.5,
+          decay: 1.0,
+          sustain: 0.6,
+          release: 2.5
+        },
+        modulation: { type: "triangle" },
+        modulationEnvelope: {
+          attack: 0.3,
+          decay: 0.8,
+          sustain: 0.5,
+          release: 2.0
+        }
+      }).toDestination();
+      synth.volume.value = -12;
+      return synth;
+    }
+  },
+  bright_keys: {
+    name: "Bright Keys",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 4,
+        modulationIndex: 15,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.005,
+          decay: 0.8,
+          sustain: 0.4,
+          release: 1.2
+        },
+        modulation: { type: "sine" },
+        modulationEnvelope: {
+          attack: 0.002,
+          decay: 0.5,
+          sustain: 0.3,
+          release: 0.8
+        }
+      }).toDestination();
+      synth.volume.value = -7;
+      return synth;
+    }
+  },
+  // Bass synths - Enhanced
   bass_synth: {
-    name: "Bass Synth",
-    config: () => new window.Tone.Synth({
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.8 }
-    }).toDestination()
+    name: "Analog Bass",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "sawtooth"
+        },
+        filter: {
+          Q: 4,
+          type: "lowpass",
+          rolloff: -24,
+          frequency: 800
+        },
+        envelope: {
+          attack: 0.01,
+          decay: 0.3,
+          sustain: 0.4,
+          release: 0.8
+        },
+        filterEnvelope: {
+          attack: 0.01,
+          decay: 0.2,
+          sustain: 0.3,
+          release: 0.5,
+          baseFrequency: 200,
+          octaves: 4,
+          exponent: 2
+        }
+      }).toDestination();
+      synth.volume.value = -8;
+      return synth;
+    }
   },
   sub_bass: {
     name: "Sub Bass",
-    config: () => new window.Tone.Synth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.02, decay: 0.3, sustain: 0.8, release: 1.2 }
-    }).toDestination()
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "sine"
+        },
+        filter: {
+          Q: 2,
+          type: "lowpass",
+          rolloff: -12,
+          frequency: 150
+        },
+        envelope: {
+          attack: 0.02,
+          decay: 0.4,
+          sustain: 0.9,
+          release: 1.2
+        },
+        filterEnvelope: {
+          attack: 0.05,
+          decay: 0.3,
+          sustain: 0.2,
+          release: 1.0,
+          baseFrequency: 80,
+          octaves: 2
+        }
+      }).toDestination();
+      synth.volume.value = -6;
+      return synth;
+    }
+  },
+  reese_bass: {
+    name: "Reese Bass",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "square",
+          modulationType: "sawtooth",
+          harmonicity: 1.005
+        },
+        filter: {
+          Q: 3,
+          type: "lowpass",
+          rolloff: -24,
+          frequency: 600
+        },
+        envelope: {
+          attack: 0.01,
+          decay: 0.25,
+          sustain: 0.6,
+          release: 0.9
+        },
+        filterEnvelope: {
+          attack: 0.02,
+          decay: 0.3,
+          sustain: 0.4,
+          release: 0.7,
+          baseFrequency: 150,
+          octaves: 3.5
+        }
+      }).toDestination();
+      synth.volume.value = -10;
+      return synth;
+    }
+  },
+  fat_bass: {
+    name: "Fat Bass",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "fatsawtooth"
+        },
+        filter: {
+          Q: 5,
+          type: "lowpass",
+          rolloff: -24,
+          frequency: 1000
+        },
+        envelope: {
+          attack: 0.005,
+          decay: 0.2,
+          sustain: 0.5,
+          release: 0.6
+        },
+        filterEnvelope: {
+          attack: 0.01,
+          decay: 0.15,
+          sustain: 0.3,
+          release: 0.4,
+          baseFrequency: 300,
+          octaves: 4.5
+        }
+      }).toDestination();
+      synth.volume.value = -7;
+      return synth;
+    }
+  },
+  acid_bass: {
+    name: "Acid Bass",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "square"
+        },
+        filter: {
+          Q: 8,
+          type: "lowpass",
+          rolloff: -24,
+          frequency: 400
+        },
+        envelope: {
+          attack: 0.005,
+          decay: 0.1,
+          sustain: 0.3,
+          release: 0.4
+        },
+        filterEnvelope: {
+          attack: 0.005,
+          decay: 0.15,
+          sustain: 0.2,
+          release: 0.3,
+          baseFrequency: 100,
+          octaves: 5,
+          exponent: 3
+        }
+      }).toDestination();
+      synth.volume.value = -9;
+      return synth;
+    }
   },
   // Harmony/Pad synths
   pad_synth: {
@@ -317,8 +589,8 @@ const getPresetsForTrack = (trackType: 'bass' | 'melody' | 'harmony') => {
   switch (trackType) {
     case 'bass':
       return Object.fromEntries(
-        Object.entries(synthPresets).filter(([key]) => 
-          ['bass_synth', 'sub_bass'].includes(key)
+        Object.entries(synthPresets).filter(([key]) =>
+          ['bass_synth', 'sub_bass', 'reese_bass', 'fat_bass', 'acid_bass'].includes(key)
         )
       );
     case 'harmony':
@@ -330,8 +602,8 @@ const getPresetsForTrack = (trackType: 'bass' | 'melody' | 'harmony') => {
     case 'melody':
     default:
       return Object.fromEntries(
-        Object.entries(synthPresets).filter(([key]) => 
-          !['bass_synth', 'sub_bass', 'pad_synth', 'string_pad'].includes(key)
+        Object.entries(synthPresets).filter(([key]) =>
+          ['electric_piano', 'pluck', 'marimba', 'bell', 'lead_synth', 'square_lead', 'ambient_keys', 'bright_keys'].includes(key)
         )
       );
   }
@@ -389,6 +661,7 @@ const applyStepwiseBias = (baseWeights: number[], previousNote: string, currentS
 export default function MelodyGeneratorComponent() {
   const [state, setState] = useState<MultiTrackState>({
     tempo: 120,
+    masterVolume: 80,
     scale: "major",
     key: "C",
     timeSignature: "4/4",
@@ -1134,7 +1407,6 @@ export default function MelodyGeneratorComponent() {
       {/* Global Control Buttons */}
       <div className="flex gap-4 mb-6">
         <Button
-          variant="secondary"
           onClick={generateAllTracks}
           className="flex-1"
           data-testid="button-generate-all"
@@ -1178,8 +1450,8 @@ export default function MelodyGeneratorComponent() {
         <CardContent className="p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">Global Settings</h2>
           
-          {/* Tempo and Time Signature */}
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
+          {/* Tempo, Master Volume and Time Signature */}
+          <div className="grid md:grid-cols-3 gap-6 mb-6">
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground flex items-center justify-between">
                 <span>Tempo (BPM)</span>
@@ -1197,7 +1469,29 @@ export default function MelodyGeneratorComponent() {
                 className="slider-thumb"
               />
             </div>
-            
+
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                <span>Master Volume</span>
+                <span className="text-primary font-semibold">
+                  {state.masterVolume}%
+                </span>
+              </label>
+              <Slider
+                value={[state.masterVolume]}
+                onValueChange={(value) => {
+                  setState(prev => ({ ...prev, masterVolume: value[0] }));
+                  if (window.Tone?.Destination) {
+                    window.Tone.Destination.volume.value = (value[0] / 100) * 20 - 20;
+                  }
+                }}
+                min={0}
+                max={100}
+                step={1}
+                className="slider-thumb"
+              />
+            </div>
+
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Time Signature</label>
               <Select 
@@ -1397,8 +1691,58 @@ export default function MelodyGeneratorComponent() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Octave Range</label>
-                  <div className="text-sm text-muted-foreground">
-                    {state.tracks[trackType].octaveRange[0]} - {state.tracks[trackType].octaveRange[1]}
+                  <div className="flex gap-1 items-center text-xs">
+                    <Select
+                      value={state.tracks[trackType].octaveRange[0].toString()}
+                      onValueChange={(value) => {
+                        const newMin = parseInt(value);
+                        setState(prev => ({
+                          ...prev,
+                          tracks: {
+                            ...prev.tracks,
+                            [trackType]: {
+                              ...prev.tracks[trackType],
+                              octaveRange: [newMin, Math.max(newMin, prev.tracks[trackType].octaveRange[1])]
+                            }
+                          }
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="w-12 h-7 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(octave => (
+                          <SelectItem key={octave} value={octave.toString()}>{octave}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground text-xs">to</span>
+                    <Select
+                      value={state.tracks[trackType].octaveRange[1].toString()}
+                      onValueChange={(value) => {
+                        const newMax = parseInt(value);
+                        setState(prev => ({
+                          ...prev,
+                          tracks: {
+                            ...prev.tracks,
+                            [trackType]: {
+                              ...prev.tracks[trackType],
+                              octaveRange: [Math.min(prev.tracks[trackType].octaveRange[0], newMax), newMax]
+                            }
+                          }
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="w-12 h-7 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(octave => (
+                          <SelectItem key={octave} value={octave.toString()}>{octave}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -1432,27 +1776,6 @@ export default function MelodyGeneratorComponent() {
                 </div>
               </div>
 
-              {/* Track Preview */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Track Preview</label>
-                <div className="flex flex-wrap gap-2" data-testid={`${trackType}-note-indicators`}>
-                  {state.tracks[trackType].hasGenerated ? (
-                    Array.from({ length: state.tracks[trackType].generatedSequence.length }, (_, index) => (
-                      <div
-                        key={index}
-                        className={`note-indicator w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium text-muted-foreground ${
-                          state.tracks[trackType].currentNoteIndex === index ? 'active' : ''
-                        }`}
-                        data-testid={`${trackType}-note-indicator-${index}`}
-                      >
-                        {index + 1}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-sm text-muted-foreground">Generate track to see preview</div>
-                  )}
-                </div>
-              </div>
             </CardContent>
           </Card>
         ))}
