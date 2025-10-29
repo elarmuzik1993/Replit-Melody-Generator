@@ -14,14 +14,23 @@ declare global {
   }
 }
 
+interface NoteWithTiming {
+  note: string;
+  duration: number;  // in beats (0.25 = 16th, 0.5 = 8th, 1.0 = quarter, etc.)
+  velocity: number;  // 0-127 MIDI velocity
+}
+
 interface TrackData {
   generatedSequence: string[];
+  generatedSequenceWithTiming: NoteWithTiming[];  // New: rhythm-aware sequence
   isEnabled: boolean;
   volume: number;
   synthType: string;
   currentNoteIndex: number;
+  currentStepIndex: number; // Current step position in sequencer (0-15 or 0-31)
   hasGenerated: boolean;
   octaveRange: [number, number];
+  customLoopEndStep: number | null; // Custom loop end point (null = use full length)
 }
 
 interface MultiTrackState {
@@ -30,6 +39,7 @@ interface MultiTrackState {
   masterVolume: number;
   key: string;
   scale: string;
+  genre: string; // Genre style selector
   timeSignature: string;
   isPlaying: boolean;
   isLooping: boolean;
@@ -97,6 +107,164 @@ const scaleWeights = {
     blues: [2.5, 3.0, 2.5, 2.0, 2.0, 2.5],
     dorian: [3.0, 1.0, 4.0, 2.0, 2.5, 2.5, 2.0],
     mixolydian: [3.0, 1.0, 4.0, 2.0, 2.5, 2.0, 3.0]
+  }
+};
+
+// Melodic direction for contour control
+enum Direction { UP, DOWN, REPEAT }
+
+// Interval quality weights (how "musical" each interval sounds)
+const intervalQuality: { [key: number]: number } = {
+  0: 1.0,   // Unison/Repeat - common
+  1: 0.4,   // Minor second (semitone) - rare, creates tension
+  2: 2.0,   // Major second (whole step) - very common, smooth
+  3: 1.5,   // Minor third - common
+  4: 1.5,   // Major third - common
+  5: 1.0,   // Perfect fourth - moderate
+  6: 0.3,   // Tritone - rare, dissonant
+  7: 1.2,   // Perfect fifth - moderate, consonant
+  8: 0.5,   // Minor sixth - occasional
+  9: 0.5,   // Major sixth - occasional
+  10: 0.4,  // Minor seventh - rare
+  11: 0.4,  // Major seventh - rare
+  12: 0.6,  // Octave - occasional accent
+};
+
+// Rhythm patterns for humanized melody generation
+const rhythmPatterns = {
+  simple: [1, 1, 1, 1],                           // All quarter notes (robotic baseline)
+  syncopated: [0.5, 0.5, 1, 0.5, 1.5],           // Eighth-quarter-eighth-dotted quarter
+  triplet: [0.33, 0.33, 0.34, 1],                 // Triplet eighth + quarter note
+  swing: [0.67, 0.33, 0.67, 0.33],               // Swing feel (long-short pattern)
+  dotted: [0.75, 0.25, 1, 0.5, 0.5],             // Dotted eighth + sixteenth + quarter + two eighths
+  mixed: [1, 0.5, 0.5, 0.75, 0.25, 1],           // Varied rhythms
+  steady_bass: [1, 1, 1, 1],                      // Bass: steady quarter notes
+  bass_walking: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  // Bass: eighth note walk
+  harmony_sustain: [2, 2, 2, 2],                  // Harmony: long sustained notes (half notes)
+
+  // Genre-specific patterns
+  jazz_swing: [0.67, 0.33, 0.67, 0.33, 1, 0.5, 0.5],
+  hiphop: [0.5, 0.25, 0.25, 1, 0.5, 0.5],
+  edm: [0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 1],
+  pop: [1, 0.5, 0.5, 1, 0.5, 1.5],
+  classical: [1, 0.5, 0.5, 1, 1, 2],
+  trap: [0.25, 0.25, 0.5, 0.5, 0.25, 0.75, 0.5],
+  latin: [0.5, 0.5, 0.5, 0.5, 1, 1],
+  ballad: [2, 1, 1, 2, 2]
+};
+
+// Genre definitions with musical characteristics
+interface GenreStyle {
+  name: string;
+  rhythmPatterns: number[][];
+  preferredScales: string[];
+  intervalBias: number; // 0-1: 0=stepwise, 1=leaps allowed
+  velocityRange: [number, number];
+  motifRepetition: number; // 0-1: how often to repeat motifs exactly
+  restProbability: number; // 0-1: how often to add rests
+  tempoRange: [number, number];
+  description: string;
+}
+
+const genreStyles: { [key: string]: GenreStyle } = {
+  pop: {
+    name: "Pop",
+    rhythmPatterns: [rhythmPatterns.pop, rhythmPatterns.syncopated, rhythmPatterns.dotted],
+    preferredScales: ["major", "minor", "pentatonic"],
+    intervalBias: 0.3,
+    velocityRange: [75, 95],
+    motifRepetition: 0.7,
+    restProbability: 0.2,
+    tempoRange: [100, 140],
+    description: "Catchy, repetitive melodies with strong hooks"
+  },
+  jazz: {
+    name: "Jazz",
+    rhythmPatterns: [rhythmPatterns.jazz_swing, rhythmPatterns.swing, rhythmPatterns.triplet],
+    preferredScales: ["dorian", "mixolydian", "blues"],
+    intervalBias: 0.6,
+    velocityRange: [60, 100],
+    motifRepetition: 0.4,
+    restProbability: 0.3,
+    tempoRange: [80, 200],
+    description: "Swung rhythms, complex intervals, improvised feel"
+  },
+  hiphop: {
+    name: "Hip Hop",
+    rhythmPatterns: [rhythmPatterns.hiphop, rhythmPatterns.syncopated],
+    preferredScales: ["minor", "blues", "pentatonic"],
+    intervalBias: 0.25,
+    velocityRange: [70, 90],
+    motifRepetition: 0.8,
+    restProbability: 0.4,
+    tempoRange: [70, 100],
+    description: "Repetitive loops, simple melodies, heavy rests"
+  },
+  edm: {
+    name: "EDM",
+    rhythmPatterns: [rhythmPatterns.edm, rhythmPatterns.mixed],
+    preferredScales: ["minor", "major", "pentatonic"],
+    intervalBias: 0.5,
+    velocityRange: [85, 100],
+    motifRepetition: 0.75,
+    restProbability: 0.15,
+    tempoRange: [120, 150],
+    description: "Build-ups, drops, energetic and driving"
+  },
+  classical: {
+    name: "Classical",
+    rhythmPatterns: [rhythmPatterns.classical, rhythmPatterns.dotted, rhythmPatterns.triplet],
+    preferredScales: ["major", "minor"],
+    intervalBias: 0.4,
+    velocityRange: [50, 100],
+    motifRepetition: 0.5,
+    restProbability: 0.25,
+    tempoRange: [60, 140],
+    description: "Elegant phrases, dynamic range, formal structure"
+  },
+  trap: {
+    name: "Trap",
+    rhythmPatterns: [rhythmPatterns.trap, rhythmPatterns.hiphop],
+    preferredScales: ["minor", "blues"],
+    intervalBias: 0.35,
+    velocityRange: [75, 95],
+    motifRepetition: 0.85,
+    restProbability: 0.35,
+    tempoRange: [130, 170],
+    description: "Hi-hat rolls, sparse melodies, dark atmosphere"
+  },
+  latin: {
+    name: "Latin",
+    rhythmPatterns: [rhythmPatterns.latin, rhythmPatterns.syncopated],
+    preferredScales: ["major", "dorian", "mixolydian"],
+    intervalBias: 0.35,
+    velocityRange: [75, 100],
+    motifRepetition: 0.6,
+    restProbability: 0.2,
+    tempoRange: [100, 140],
+    description: "Syncopated rhythms, festive, danceable"
+  },
+  ballad: {
+    name: "Ballad",
+    rhythmPatterns: [rhythmPatterns.ballad, rhythmPatterns.simple],
+    preferredScales: ["major", "minor"],
+    intervalBias: 0.3,
+    velocityRange: [50, 80],
+    motifRepetition: 0.65,
+    restProbability: 0.3,
+    tempoRange: [60, 90],
+    description: "Slow, emotional, sustained notes, expressive"
+  },
+  automatic: {
+    name: "Automatic (Mix)",
+    rhythmPatterns: [rhythmPatterns.syncopated, rhythmPatterns.dotted, rhythmPatterns.mixed],
+    preferredScales: ["major", "minor", "pentatonic"],
+    intervalBias: 0.4,
+    velocityRange: [70, 95],
+    motifRepetition: 0.6,
+    restProbability: 0.25,
+    tempoRange: [80, 140],
+    description: "Adaptive mix of styles"
   }
 };
 
@@ -664,6 +832,7 @@ export default function MelodyGeneratorComponent() {
     masterVolume: 80,
     scale: "major",
     key: "C",
+    genre: "automatic",
     timeSignature: "4/4",
     isPlaying: false,
     isLooping: true,
@@ -672,30 +841,39 @@ export default function MelodyGeneratorComponent() {
     tracks: {
       bass: {
         generatedSequence: [],
+        generatedSequenceWithTiming: [],
         isEnabled: true,
         volume: 0.8,
         synthType: "bass_synth",
         currentNoteIndex: -1,
+        currentStepIndex: -1,
         hasGenerated: false,
-        octaveRange: [2, 3]
+        octaveRange: [2, 3],
+        customLoopEndStep: null
       },
       melody: {
         generatedSequence: [],
+        generatedSequenceWithTiming: [],
         isEnabled: true,
         volume: 0.7,
         synthType: "electric_piano",
         currentNoteIndex: -1,
+        currentStepIndex: -1,
         hasGenerated: false,
-        octaveRange: [4, 5]
+        octaveRange: [4, 5],
+        customLoopEndStep: null
       },
       harmony: {
         generatedSequence: [],
+        generatedSequenceWithTiming: [],
         isEnabled: true,
         volume: 0.5,
         synthType: "pad_synth",
         currentNoteIndex: -1,
+        currentStepIndex: -1,
         hasGenerated: false,
-        octaveRange: [4, 6]
+        octaveRange: [4, 6],
+        customLoopEndStep: null
       }
     },
     // Legacy compatibility fields (mirrored from melody track)
@@ -721,6 +899,9 @@ export default function MelodyGeneratorComponent() {
   
   const metronomeRef = useRef<any>(null);
   const metronomeSequenceRef = useRef<any>(null);
+
+  // Step sequencer for continuous LED indicator
+  const stepSequencerRef = useRef<any>(null);
 
   const initializeSynths = () => {
     if (!toneLoaded) return;
@@ -1099,20 +1280,334 @@ export default function MelodyGeneratorComponent() {
     return sequence;
   };
 
+  // New rhythm-aware track generation with timing and velocity
+  const generateTrackWithTiming = (trackType: 'bass' | 'melody' | 'harmony', melodySequence?: NoteWithTiming[]): NoteWithTiming[] => {
+    const scaleNotes = scales[state.scale as keyof typeof scales];
+    const baseNote = state.key;
+    const trackData = state.tracks[trackType];
+    const [minOctave, maxOctave] = trackData.octaveRange;
+    const keyIndex = keys.indexOf(baseNote);
+    const sequenceWithTiming: NoteWithTiming[] = [];
+
+    // Calculate total beats to fill based on loop length
+    const [beats, denominator] = state.timeSignature.split('/').map(Number);
+    const beatsPerBar = beats * (4 / denominator); // Convert to quarter note beats
+    const totalBeats = state.loopLength * beatsPerBar;
+
+    // Select rhythm pattern based on track type
+    let rhythmPattern: number[];
+    if (trackType === 'bass') {
+      rhythmPattern = rhythmPatterns.steady_bass;
+    } else if (trackType === 'harmony') {
+      rhythmPattern = rhythmPatterns.harmony_sustain;
+    } else {
+      // Melody: randomly choose between syncopated, dotted, or mixed patterns
+      const melodyPatterns = [rhythmPatterns.syncopated, rhythmPatterns.dotted, rhythmPatterns.mixed];
+      rhythmPattern = melodyPatterns[Math.floor(Math.random() * melodyPatterns.length)];
+    }
+
+    // Generate notes with rhythm pattern
+    let currentBeat = 0;
+    let patternIndex = 0;
+    const baseWeights = scaleWeights[trackType][state.scale as keyof typeof scaleWeights[typeof trackType]] ?? Array(scaleNotes.length).fill(1);
+
+    while (currentBeat < totalBeats) {
+      const duration = rhythmPattern[patternIndex % rhythmPattern.length];
+
+      // Don't exceed total beats
+      const actualDuration = Math.min(duration, totalBeats - currentBeat);
+      if (actualDuration <= 0) break;
+
+      // Generate note
+      let currentWeights = baseWeights;
+
+      // Apply melodic logic for melody track
+      if (sequenceWithTiming.length > 0 && trackType === 'melody') {
+        const lastNote = sequenceWithTiming[sequenceWithTiming.length - 1].note;
+        currentWeights = applyStepwiseBias(
+          baseWeights,
+          lastNote,
+          scaleNotes,
+          keyIndex,
+          minOctave
+        );
+      }
+
+      const selectedScaleIndex = weightedRandomSelect(
+        scaleNotes.map((_, index) => index),
+        currentWeights
+      );
+      const semitone = scaleNotes[selectedScaleIndex];
+      const noteIndex = (keyIndex + semitone) % 12;
+
+      // Choose octave
+      const octave = trackType === 'bass'
+        ? minOctave
+        : Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+
+      const newNote = keys[noteIndex] + octave;
+
+      // Velocity variation for humanization
+      let velocity = 80;
+      if (trackType === 'melody') {
+        // Melody: 70-100 with some accents
+        velocity = 70 + Math.floor(Math.random() * 30);
+        // Accent on longer notes
+        if (duration >= 1) velocity = Math.min(100, velocity + 10);
+      } else if (trackType === 'bass') {
+        // Bass: consistent 75-90
+        velocity = 75 + Math.floor(Math.random() * 15);
+      } else {
+        // Harmony: softer 60-80
+        velocity = 60 + Math.floor(Math.random() * 20);
+      }
+
+      sequenceWithTiming.push({
+        note: newNote,
+        duration: actualDuration,
+        velocity: velocity
+      });
+
+      currentBeat += actualDuration;
+      patternIndex++;
+    }
+
+    return sequenceWithTiming;
+  };
+
+  // Enhanced melody generation with motif repetition, contour, and phrase structure
+  const generateMelodyWithStructure = (): NoteWithTiming[] => {
+    // Get genre style settings
+    const genreStyle = genreStyles[state.genre] || genreStyles.automatic;
+
+    const scaleNotes = scales[state.scale as keyof typeof scales];
+    const baseNote = state.key;
+    const [minOctave, maxOctave] = state.tracks.melody.octaveRange;
+    const keyIndex = keys.indexOf(baseNote);
+    const sequenceWithTiming: NoteWithTiming[] = [];
+
+    // Calculate total beats
+    const [beats, denominator] = state.timeSignature.split('/').map(Number);
+    const beatsPerBar = beats * (4 / denominator);
+    const totalBeats = state.loopLength * beatsPerBar;
+
+    // Select rhythm pattern based on genre
+    const rhythmPattern = genreStyle.rhythmPatterns[Math.floor(Math.random() * genreStyle.rhythmPatterns.length)];
+
+    // Helper: Generate a single note with contour bias and smart intervals
+    const generateNote = (direction: Direction, lastNote: string | null, scaleWeights: number[]): { note: string, scaleIndex: number } => {
+      let currentWeights = [...scaleWeights];
+
+      if (lastNote) {
+        // Parse last note
+        const lastNoteName = lastNote.slice(0, -1);
+        const lastOctave = parseInt(lastNote.slice(-1));
+        const lastNoteIndex = keys.indexOf(lastNoteName);
+        const lastSemitone = (lastNoteIndex - keyIndex + 12) % 12;
+        const lastScaleIndex = scaleNotes.indexOf(lastSemitone);
+
+        if (lastScaleIndex !== -1) {
+          // Apply directional bias
+          currentWeights = currentWeights.map((weight, idx) => {
+            let newWeight = weight;
+
+            // Directional bias
+            if (direction === Direction.UP) {
+              newWeight = idx > lastScaleIndex ? weight * 3 : weight * 0.3;
+            } else if (direction === Direction.DOWN) {
+              newWeight = idx < lastScaleIndex ? weight * 3 : weight * 0.3;
+            } else {
+              // REPEAT: favor staying close
+              const distance = Math.abs(idx - lastScaleIndex);
+              newWeight = distance === 0 ? weight * 4 : distance === 1 ? weight * 2 : weight * 0.5;
+            }
+
+            // Apply interval quality weighting (Phase 3: Smart Intervals)
+            const intervalInSemitones = Math.abs(scaleNotes[idx] - scaleNotes[lastScaleIndex]);
+            const intervalQualityWeight = intervalQuality[intervalInSemitones] ?? 0.3;
+            newWeight *= intervalQualityWeight;
+
+            // Genre-specific interval bias (allow more leaps in jazz, fewer in pop/ballad)
+            const leapThreshold = 7 - (genreStyle.intervalBias * 3); // 4-7 semitones
+            const leapProbability = 0.15 + (genreStyle.intervalBias * 0.35); // 15%-50% chance
+            if (intervalInSemitones > leapThreshold && Math.random() > leapProbability) {
+              newWeight *= 0.1;
+            }
+
+            return newWeight;
+          });
+        }
+      }
+
+      const selectedScaleIndex = weightedRandomSelect(
+        scaleNotes.map((_, index) => index),
+        currentWeights
+      );
+      const semitone = scaleNotes[selectedScaleIndex];
+      const noteIndex = (keyIndex + semitone) % 12;
+      const octave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+      return { note: keys[noteIndex] + octave, scaleIndex: selectedScaleIndex };
+    };
+
+    // Helper: Generate a motif (2-4 notes)
+    const generateMotif = (numNotes: number, direction: Direction): NoteWithTiming[] => {
+      const motif: NoteWithTiming[] = [];
+      let lastNote: string | null = null;
+      const baseWeights = scaleWeights.melody[state.scale as keyof typeof scaleWeights.melody] ?? Array(scaleNotes.length).fill(1);
+
+      for (let i = 0; i < numNotes; i++) {
+        const { note } = generateNote(direction, lastNote, baseWeights);
+        const duration = rhythmPattern[i % rhythmPattern.length];
+        // Genre-specific velocity range
+        const [minVel, maxVel] = genreStyle.velocityRange;
+        const velocity = minVel + Math.floor(Math.random() * (maxVel - minVel));
+
+        motif.push({ note, duration, velocity });
+        lastNote = note;
+      }
+
+      return motif;
+    };
+
+    // Helper: Transpose motif by scale degrees
+    const transposeMotif = (motif: NoteWithTiming[], semitones: number): NoteWithTiming[] => {
+      return motif.map(noteData => {
+        const noteName = noteData.note.slice(0, -1);
+        const octave = parseInt(noteData.note.slice(-1));
+        const noteIndex = keys.indexOf(noteName);
+        const newNoteIndex = (noteIndex + semitones) % 12;
+        const octaveAdjust = Math.floor((noteIndex + semitones) / 12);
+        const newNote = keys[newNoteIndex] + Math.max(minOctave, Math.min(maxOctave, octave + octaveAdjust));
+
+        return { ...noteData, note: newNote };
+      });
+    };
+
+    // Generate phrases with motifs
+    let currentBeat = 0;
+    const beatsPerPhrase = totalBeats / 2; // Two phrases: question + answer
+
+    // PHRASE 1: Question (rising, tension-building)
+    const motifLength = 3 + Math.floor(Math.random() * 2); // 3-4 notes
+    const questionMotif = generateMotif(motifLength, Direction.UP);
+
+    let motifBeat = questionMotif.reduce((sum, n) => sum + n.duration, 0);
+
+    // Repeat motif in question phrase (genre-specific repetition rate)
+    while (currentBeat + motifBeat <= beatsPerPhrase) {
+      if (Math.random() < genreStyle.motifRepetition) {
+        // Genre-based exact repetition (70% pop, 40% jazz, 85% trap)
+        sequenceWithTiming.push(...questionMotif);
+      } else {
+        // Transposed variation
+        const transpose = (Math.floor(Math.random() * 3) + 2) * (Math.random() < 0.5 ? 1 : -1);
+        sequenceWithTiming.push(...transposeMotif(questionMotif, transpose));
+      }
+      currentBeat += motifBeat;
+    }
+
+    // Fill remaining beats in question phrase (genre-specific rest probability)
+    const shouldAddRest = Math.random() < genreStyle.restProbability;
+    const questionEndTarget = shouldAddRest ? beatsPerPhrase - 0.5 : beatsPerPhrase;
+
+    while (currentBeat < questionEndTarget) {
+      const duration = Math.min(rhythmPattern[sequenceWithTiming.length % rhythmPattern.length], questionEndTarget - currentBeat);
+      if (duration < 0.25) break;
+
+      const lastNote = sequenceWithTiming[sequenceWithTiming.length - 1]?.note || null;
+      const baseWeights = scaleWeights.melody[state.scale as keyof typeof scaleWeights.melody] ?? Array(scaleNotes.length).fill(1);
+      const { note } = generateNote(Direction.UP, lastNote, baseWeights);
+      // Genre-specific velocity
+      const [minVel, maxVel] = genreStyle.velocityRange;
+      const velocity = minVel + Math.floor(Math.random() * (maxVel - minVel));
+
+      sequenceWithTiming.push({ note, duration, velocity });
+      currentBeat += duration;
+    }
+
+    // Add rest between phrases if genre prefers it
+    if (shouldAddRest && currentBeat < beatsPerPhrase) {
+      const restDuration = beatsPerPhrase - currentBeat;
+      sequenceWithTiming.push({ note: 'REST', duration: restDuration, velocity: 0 });
+      currentBeat = beatsPerPhrase;
+    }
+
+    // PHRASE 2: Answer (falling, resolving)
+    const answerMotif = generateMotif(motifLength, Direction.DOWN);
+    motifBeat = answerMotif.reduce((sum, n) => sum + n.duration, 0);
+
+    // Repeat motif in answer phrase (genre-specific repetition rate)
+    while (currentBeat + motifBeat <= totalBeats) {
+      if (Math.random() < genreStyle.motifRepetition) {
+        sequenceWithTiming.push(...answerMotif);
+      } else {
+        const transpose = (Math.floor(Math.random() * 3) + 2) * (Math.random() < 0.5 ? 1 : -1);
+        sequenceWithTiming.push(...transposeMotif(answerMotif, transpose));
+      }
+      currentBeat += motifBeat;
+    }
+
+    // Fill remaining beats in answer phrase
+    while (currentBeat < totalBeats) {
+      const duration = Math.min(rhythmPattern[sequenceWithTiming.length % rhythmPattern.length], totalBeats - currentBeat);
+      const lastNote = sequenceWithTiming[sequenceWithTiming.length - 1]?.note || null;
+      const baseWeights = scaleWeights.melody[state.scale as keyof typeof scaleWeights.melody] ?? Array(scaleNotes.length).fill(1);
+      const { note } = generateNote(Direction.DOWN, lastNote, baseWeights);
+      // Genre-specific velocity
+      const [minVel, maxVel] = genreStyle.velocityRange;
+      const velocity = minVel + Math.floor(Math.random() * (maxVel - minVel));
+
+      sequenceWithTiming.push({ note, duration, velocity });
+      currentBeat += duration;
+    }
+
+    // End on tonic (root note) for resolution
+    const tonicNote = state.key + minOctave;
+    if (sequenceWithTiming.length > 0) {
+      sequenceWithTiming[sequenceWithTiming.length - 1].note = tonicNote;
+      sequenceWithTiming[sequenceWithTiming.length - 1].velocity = 90; // Strong ending
+    }
+
+    return sequenceWithTiming;
+  };
+
   const generateAllTracks = () => {
     setStatus("Generating all tracks...");
 
-    // Generate in order: bass, melody, then harmony (so harmony can reference melody)
-    const bassTrack = generateTrack('bass');
-    const melodyTrack = generateTrack('melody');
-    const harmonyTrack = generateTrack('harmony', melodyTrack); // Pass melody for complementary intervals
+    // Generate rhythm-aware tracks
+    const bassTrackWithTiming = generateTrackWithTiming('bass');
+    const melodyTrackWithTiming = generateMelodyWithStructure(); // Use enhanced melody generator
+    const harmonyTrackWithTiming = generateTrackWithTiming('harmony', melodyTrackWithTiming);
+
+    // Also create simple note arrays for backward compatibility
+    const bassTrack = bassTrackWithTiming.map(n => n.note);
+    const melodyTrack = melodyTrackWithTiming.map(n => n.note);
+    const harmonyTrack = harmonyTrackWithTiming.map(n => n.note);
 
     setState(prev => ({
       ...prev,
       tracks: {
-        bass: { ...prev.tracks.bass, generatedSequence: bassTrack, hasGenerated: true, currentNoteIndex: -1 },
-        melody: { ...prev.tracks.melody, generatedSequence: melodyTrack, hasGenerated: true, currentNoteIndex: -1 },
-        harmony: { ...prev.tracks.harmony, generatedSequence: harmonyTrack, hasGenerated: true, currentNoteIndex: -1 }
+        bass: {
+          ...prev.tracks.bass,
+          generatedSequence: bassTrack,
+          generatedSequenceWithTiming: bassTrackWithTiming,
+          hasGenerated: true,
+          currentNoteIndex: -1
+        },
+        melody: {
+          ...prev.tracks.melody,
+          generatedSequence: melodyTrack,
+          generatedSequenceWithTiming: melodyTrackWithTiming,
+          hasGenerated: true,
+          currentNoteIndex: -1
+        },
+        harmony: {
+          ...prev.tracks.harmony,
+          generatedSequence: harmonyTrack,
+          generatedSequenceWithTiming: harmonyTrackWithTiming,
+          hasGenerated: true,
+          currentNoteIndex: -1
+        }
       },
       // Mirror melody track to legacy fields for backward compatibility
       generatedMelody: melodyTrack,
@@ -1160,87 +1655,198 @@ export default function MelodyGeneratorComponent() {
         harmonySequenceRef.current.stop();
         harmonySequenceRef.current.dispose();
       }
+      if (stepSequencerRef.current) {
+        stepSequencerRef.current.stop();
+        stepSequencerRef.current.dispose();
+      }
 
-      // Create synchronized sequences for each track with proper step counters
-      if (state.tracks.bass.generatedSequence.length > 0 && state.tracks.bass.isEnabled) {
-        let bassIndex = 0;
-        const bassSequenceLength = state.tracks.bass.generatedSequence.length;
-        bassSequenceRef.current = new window.Tone.Sequence(
-          (time: number, note: string) => {
-            // Update bass track visual indicator
+      // Create step sequencer for continuous LED indicator (Roland TR-8S style)
+      const totalSteps = state.loopLength === 4 ? 16 : 32;
+      const customLoopEndStep = state.tracks.bass.customLoopEndStep;
+      const effectiveSteps = customLoopEndStep !== null ? customLoopEndStep + 1 : totalSteps;
+
+      // Create array of step indices to iterate through
+      const stepArray = Array.from({ length: effectiveSteps }, (_, i) => i);
+
+      stepSequencerRef.current = new window.Tone.Sequence(
+        (time, step) => {
+          // Update the current step index in state
+          window.Tone.Draw.schedule(() => {
             setState(prev => ({
               ...prev,
               tracks: {
                 ...prev.tracks,
                 bass: {
                   ...prev.tracks.bass,
-                  currentNoteIndex: bassIndex
+                  currentStepIndex: step
                 }
               }
             }));
-            if (note && note !== 'rest') {
-              bassSynthRef.current.triggerAttackRelease(note, "8n", time);
+          }, time);
+        },
+        stepArray,
+        "16n" // 16th note subdivision
+      );
+
+      stepSequencerRef.current.loop = state.isLooping;
+      stepSequencerRef.current.start(0);
+
+      // Create synchronized sequences for each track with rhythm-aware timing
+      if (state.tracks.bass.generatedSequenceWithTiming.length > 0 && state.tracks.bass.isEnabled) {
+        let bassIndex = 0;
+        const bassSequenceWithTiming = state.tracks.bass.generatedSequenceWithTiming;
+
+        // Calculate loop end based on custom step or full length
+        const stepsPerBeat = 4; // 16th note grid
+        const customLoopEndStep = state.tracks.bass.customLoopEndStep;
+        let loopEndTime = 0;
+
+        // Build time-note pairs for Tone.Part
+        let currentTime = 0;
+        let allBassEvents = bassSequenceWithTiming.map((noteData, index) => {
+          const event = {
+            time: currentTime,
+            note: noteData.note,
+            duration: noteData.duration,
+            velocity: noteData.velocity / 127, // Normalize to 0-1 for Tone.js
+            index: index,
+            stepPosition: currentTime * stepsPerBeat
+          };
+          currentTime += noteData.duration * (60 / state.tempo) * 4; // Convert beats to seconds
+          return event;
+        });
+
+        // Filter events based on custom loop end
+        let bassEvents = allBassEvents;
+        if (customLoopEndStep !== null) {
+          const loopEndBeat = (customLoopEndStep + 1) / stepsPerBeat;
+          bassEvents = allBassEvents.filter(event => event.stepPosition < (customLoopEndStep + 1));
+          loopEndTime = (customLoopEndStep + 1) * (60 / state.tempo); // Convert steps to seconds
+        } else {
+          loopEndTime = currentTime;
+        }
+
+        bassSequenceRef.current = new window.Tone.Part((time: number, value: any) => {
+          // Update bass track note index
+          setState(prev => ({
+            ...prev,
+            tracks: {
+              ...prev.tracks,
+              bass: {
+                ...prev.tracks.bass,
+                currentNoteIndex: value.index
+              }
             }
-            bassIndex = (bassIndex + 1) % bassSequenceLength;
-          },
-          state.tracks.bass.generatedSequence,
-          "8n"
-        );
+          }));
+
+          if (value.note && value.note !== 'rest' && value.note !== 'REST') {
+            const durationInSeconds = value.duration * (60 / state.tempo) * 4;
+            bassSynthRef.current.triggerAttackRelease(
+              value.note,
+              durationInSeconds * 0.9, // Slightly shorter for articulation
+              time,
+              value.velocity
+            );
+          }
+        }, bassEvents);
+
         bassSequenceRef.current.loop = state.isLooping;
+        bassSequenceRef.current.loopEnd = loopEndTime;
       }
 
-      if (state.tracks.melody.generatedSequence.length > 0 && state.tracks.melody.isEnabled) {
+      if (state.tracks.melody.generatedSequenceWithTiming.length > 0 && state.tracks.melody.isEnabled) {
         let melodyIndex = 0;
-        const melodySequenceLength = state.tracks.melody.generatedSequence.length;
-        melodySequenceRef.current = new window.Tone.Sequence(
-          (time: number, note: string) => {
-            // Update melody track visual indicator
-            setState(prev => ({
-              ...prev,
-              tracks: {
-                ...prev.tracks,
-                melody: {
-                  ...prev.tracks.melody,
-                  currentNoteIndex: melodyIndex
-                }
+        const melodySequenceWithTiming = state.tracks.melody.generatedSequenceWithTiming;
+
+        // Build time-note pairs for Tone.Part with micro-timing humanization (Phase 3)
+        let currentTime = 0;
+        const melodyEvents = melodySequenceWithTiming.map((noteData, index) => {
+          // Micro-timing: Add slight random timing offset (±15ms max)
+          const microTiming = (Math.random() - 0.5) * 0.03; // ±1.5% of beat at 120 BPM
+
+          const event = {
+            time: currentTime + microTiming,
+            note: noteData.note,
+            duration: noteData.duration,
+            velocity: noteData.velocity / 127,
+            index: index
+          };
+          currentTime += noteData.duration * (60 / state.tempo) * 4;
+          return event;
+        });
+
+        melodySequenceRef.current = new window.Tone.Part((time: number, value: any) => {
+          setState(prev => ({
+            ...prev,
+            tracks: {
+              ...prev.tracks,
+              melody: {
+                ...prev.tracks.melody,
+                currentNoteIndex: value.index
               }
-            }));
-            if (note && note !== 'rest') {
-              melodySynthRef.current.triggerAttackRelease(note, "8n", time);
             }
-            melodyIndex = (melodyIndex + 1) % melodySequenceLength;
-          },
-          state.tracks.melody.generatedSequence,
-          "8n"
-        );
+          }));
+
+          if (value.note && value.note !== 'rest' && value.note !== 'REST') {
+            const durationInSeconds = value.duration * (60 / state.tempo) * 4;
+            // Slight duration variation for humanization
+            const durationVariation = 0.95 + Math.random() * 0.1; // 95%-105% of duration
+            melodySynthRef.current.triggerAttackRelease(
+              value.note,
+              durationInSeconds * 0.9 * durationVariation,
+              time,
+              value.velocity
+            );
+          }
+        }, melodyEvents);
+
         melodySequenceRef.current.loop = state.isLooping;
+        melodySequenceRef.current.loopEnd = currentTime;
       }
 
-      if (state.tracks.harmony.generatedSequence.length > 0 && state.tracks.harmony.isEnabled) {
+      if (state.tracks.harmony.generatedSequenceWithTiming.length > 0 && state.tracks.harmony.isEnabled) {
         let harmonyIndex = 0;
-        const harmonySequenceLength = state.tracks.harmony.generatedSequence.length;
-        harmonySequenceRef.current = new window.Tone.Sequence(
-          (time: number, note: string) => {
-            // Update harmony track visual indicator
-            setState(prev => ({
-              ...prev,
-              tracks: {
-                ...prev.tracks,
-                harmony: {
-                  ...prev.tracks.harmony,
-                  currentNoteIndex: harmonyIndex
-                }
+        const harmonySequenceWithTiming = state.tracks.harmony.generatedSequenceWithTiming;
+
+        // Build time-note pairs for Tone.Part
+        let currentTime = 0;
+        const harmonyEvents = harmonySequenceWithTiming.map((noteData, index) => {
+          const event = {
+            time: currentTime,
+            note: noteData.note,
+            duration: noteData.duration,
+            velocity: noteData.velocity / 127,
+            index: index
+          };
+          currentTime += noteData.duration * (60 / state.tempo) * 4;
+          return event;
+        });
+
+        harmonySequenceRef.current = new window.Tone.Part((time: number, value: any) => {
+          setState(prev => ({
+            ...prev,
+            tracks: {
+              ...prev.tracks,
+              harmony: {
+                ...prev.tracks.harmony,
+                currentNoteIndex: value.index
               }
-            }));
-            if (note && note !== 'rest') {
-              harmonySynthRef.current.triggerAttackRelease(note, "8n", time);
             }
-            harmonyIndex = (harmonyIndex + 1) % harmonySequenceLength;
-          },
-          state.tracks.harmony.generatedSequence,
-          "8n"
-        );
+          }));
+
+          if (value.note && value.note !== 'rest' && value.note !== 'REST') {
+            const durationInSeconds = value.duration * (60 / state.tempo) * 4;
+            harmonySynthRef.current.triggerAttackRelease(
+              value.note,
+              durationInSeconds * 0.95, // Harmony sustains slightly longer
+              time,
+              value.velocity
+            );
+          }
+        }, harmonyEvents);
+
         harmonySequenceRef.current.loop = state.isLooping;
+        harmonySequenceRef.current.loopEnd = currentTime;
       }
 
       // Set tempo and start all sequences synchronously
@@ -1296,6 +1902,11 @@ export default function MelodyGeneratorComponent() {
         harmonySequenceRef.current.dispose();
         harmonySequenceRef.current = null;
       }
+      if (stepSequencerRef.current) {
+        stepSequencerRef.current.stop();
+        stepSequencerRef.current.dispose();
+        stepSequencerRef.current = null;
+      }
 
       // Stop and clean up Transport
       if (window.Tone && window.Tone.Transport) {
@@ -1305,7 +1916,17 @@ export default function MelodyGeneratorComponent() {
     } catch (error) {
       console.error("Error during playback cleanup:", error);
     } finally {
-      setState(prev => ({ ...prev, isPlaying: false, currentNoteIndex: -1 }));
+      setState(prev => ({
+        ...prev,
+        isPlaying: false,
+        currentNoteIndex: -1,
+        tracks: {
+          ...prev.tracks,
+          bass: { ...prev.tracks.bass, currentStepIndex: -1, currentNoteIndex: -1 },
+          melody: { ...prev.tracks.melody, currentNoteIndex: -1 },
+          harmony: { ...prev.tracks.harmony, currentNoteIndex: -1 }
+        }
+      }));
       setStatus("Playback complete");
     }
   };
@@ -1513,12 +2134,39 @@ export default function MelodyGeneratorComponent() {
             </div>
           </div>
 
-          {/* Scale, Key, and Note Count */}
+          {/* Genre, Scale, and Key */}
           <div className="grid md:grid-cols-3 gap-6">
             <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground">Genre Style</label>
+              <Select
+                value={state.genre}
+                onValueChange={(value) => {
+                  setState(prev => ({ ...prev, genre: value }));
+                  const genre = genreStyles[value];
+                  setStatus(`Genre: ${genre.name} - ${genre.description}`);
+                }}
+              >
+                <SelectTrigger data-testid="select-genre">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="automatic">Automatic (Mix)</SelectItem>
+                  <SelectItem value="pop">Pop</SelectItem>
+                  <SelectItem value="jazz">Jazz</SelectItem>
+                  <SelectItem value="hiphop">Hip Hop</SelectItem>
+                  <SelectItem value="edm">EDM</SelectItem>
+                  <SelectItem value="classical">Classical</SelectItem>
+                  <SelectItem value="trap">Trap</SelectItem>
+                  <SelectItem value="latin">Latin</SelectItem>
+                  <SelectItem value="ballad">Ballad</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Musical Scale</label>
-              <Select 
-                value={state.scale} 
+              <Select
+                value={state.scale}
                 onValueChange={(value) => {
                   setState(prev => ({ ...prev, scale: value }));
                   setStatus(`Scale changed to ${value}`);
@@ -1540,8 +2188,8 @@ export default function MelodyGeneratorComponent() {
 
             <div className="space-y-3">
               <label className="text-sm font-medium text-foreground">Key</label>
-              <Select 
-                value={state.key} 
+              <Select
+                value={state.key}
                 onValueChange={(value) => {
                   setState(prev => ({ ...prev, key: value }));
                   setStatus(`Key changed to ${value}`);
@@ -1557,24 +2205,25 @@ export default function MelodyGeneratorComponent() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-foreground flex items-center justify-between">
-                <span>Notes per Track</span>
-                <span className="text-primary font-semibold" data-testid="text-note-count">
-                  {state.noteCount}
-                </span>
-              </label>
-              <Slider
-                data-testid="slider-note-count"
-                value={[state.noteCount]}
-                onValueChange={(value) => setState(prev => ({ ...prev, noteCount: value[0] }))}
-                min={4}
-                max={16}
-                step={1}
-                className="slider-thumb"
-              />
-            </div>
+          {/* Notes per Track */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-foreground flex items-center justify-between">
+              <span>Notes per Track</span>
+              <span className="text-primary font-semibold" data-testid="text-note-count">
+                {state.noteCount}
+              </span>
+            </label>
+            <Slider
+              data-testid="slider-note-count"
+              value={[state.noteCount]}
+              onValueChange={(value) => setState(prev => ({ ...prev, noteCount: value[0] }))}
+              min={4}
+              max={16}
+              step={1}
+              className="slider-thumb"
+            />
           </div>
 
           {/* Loop Length */}
@@ -1775,6 +2424,158 @@ export default function MelodyGeneratorComponent() {
                   </Select>
                 </div>
               </div>
+
+              {/* Bass Track Sequencer Visualization */}
+              {trackType === 'bass' && state.tracks.bass.hasGenerated && (
+                <div className="mt-6 pt-6 border-t border-border">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-sm font-semibold text-foreground">Step Sequencer</h4>
+                      <span className="text-xs text-muted-foreground">
+                        {state.loopLength === 4 ? '16 steps (4 bars)' : '32 steps (8 bars)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {state.tracks.bass.customLoopEndStep !== null && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setState(prev => ({
+                            ...prev,
+                            tracks: {
+                              ...prev.tracks,
+                              bass: {
+                                ...prev.tracks.bass,
+                                customLoopEndStep: null
+                              }
+                            }
+                          }))}
+                          className="text-xs h-6"
+                        >
+                          Reset Loop
+                        </Button>
+                      )}
+                      <span className="text-xs text-primary font-semibold">
+                        {state.tracks.bass.customLoopEndStep !== null
+                          ? `Loop: 1-${state.tracks.bass.customLoopEndStep + 1}`
+                          : 'Full Loop'
+                        }
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Click any step to set loop end point
+                  </p>
+
+                  {/* Sequencer Grid */}
+                  <div className="grid gap-1" style={{
+                    gridTemplateColumns: `repeat(${state.loopLength === 4 ? 16 : 32}, minmax(0, 1fr))`
+                  }}>
+                    {Array.from({ length: state.loopLength === 4 ? 16 : 32 }).map((_, index) => {
+                      // Calculate which note is playing at this step
+                      const stepsPerBeat = 4; // 16th note grid
+                      const totalSteps = state.loopLength === 4 ? 16 : 32;
+                      const bassSequence = state.tracks.bass.generatedSequenceWithTiming;
+
+                      // Find if a note starts at this step
+                      let currentBeat = 0;
+                      let noteAtStep: NoteWithTiming | null = null;
+                      let isNoteStart = false;
+
+                      for (let i = 0; i < bassSequence.length; i++) {
+                        const noteData = bassSequence[i];
+                        const noteStartStep = Math.floor(currentBeat * stepsPerBeat);
+                        const noteEndStep = Math.floor((currentBeat + noteData.duration) * stepsPerBeat);
+
+                        if (noteStartStep === index) {
+                          noteAtStep = noteData;
+                          isNoteStart = true;
+                          break;
+                        } else if (noteStartStep < index && index < noteEndStep) {
+                          noteAtStep = noteData;
+                          break;
+                        }
+
+                        currentBeat += noteData.duration;
+                      }
+
+                      // Check if this is the currently playing step
+                      const isCurrentlyPlaying = state.isPlaying && index === state.tracks.bass.currentStepIndex;
+
+                      // Beat markers (every 4 steps)
+                      const isBeatMarker = index % 4 === 0;
+                      const isBarMarker = index % 16 === 0;
+
+                      // Loop end marker
+                      const loopEndStep = state.tracks.bass.customLoopEndStep ?? (totalSteps - 1);
+                      const isLoopEnd = index === loopEndStep;
+                      const isOutsideLoop = index > loopEndStep;
+
+                      return (
+                        <div
+                          key={index}
+                          onClick={() => {
+                            // Set this step as loop end
+                            setState(prev => ({
+                              ...prev,
+                              tracks: {
+                                ...prev.tracks,
+                                bass: {
+                                  ...prev.tracks.bass,
+                                  customLoopEndStep: index
+                                }
+                              }
+                            }));
+                          }}
+                          className={`
+                            h-8 transition-all duration-75 cursor-pointer relative overflow-visible
+                            ${noteAtStep && noteAtStep.note !== 'REST'
+                              ? isNoteStart
+                                ? 'bg-primary border-2 border-primary'
+                                : 'bg-primary/50 border border-primary/30'
+                              : 'bg-card border border-border/30'
+                            }
+                            ${isBarMarker ? 'border-l-2 border-l-foreground/40' : ''}
+                            ${isBeatMarker && !isBarMarker ? 'border-l border-l-foreground/20' : ''}
+                            ${isOutsideLoop ? 'opacity-30' : ''}
+                            ${isLoopEnd ? 'border-r-4 border-r-accent' : ''}
+                            hover:opacity-80
+                          `}
+                          title={`${noteAtStep ? `${noteAtStep.note} (${noteAtStep.duration}beats)` : 'Empty'} - Click to set loop end`}
+                        >
+                          {/* Roland TR-8S style LED position indicator */}
+                          {isCurrentlyPlaying && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-full flex justify-center pointer-events-none">
+                              <div className="relative">
+                                {/* Outer glow */}
+                                <div className="absolute inset-0 w-3 h-3 bg-orange-500 rounded-full blur-md animate-pulse" />
+                                {/* LED dot */}
+                                <div className="relative w-3 h-3 bg-orange-500 rounded-full border-2 border-orange-300 shadow-lg shadow-orange-500/80" />
+                              </div>
+                            </div>
+                          )}
+                          {isLoopEnd && (
+                            <div className="absolute -top-2 -right-1 w-3 h-3 bg-accent rounded-full border-2 border-background" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Step Numbers */}
+                  <div className="grid gap-1 mt-1" style={{
+                    gridTemplateColumns: `repeat(${state.loopLength === 4 ? 16 : 32}, minmax(0, 1fr))`
+                  }}>
+                    {Array.from({ length: state.loopLength === 4 ? 16 : 32 }).map((_, index) => (
+                      <div key={index} className="text-center">
+                        {index % 4 === 0 && (
+                          <span className="text-[10px] text-muted-foreground">{index / 4 + 1}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
             </CardContent>
           </Card>
