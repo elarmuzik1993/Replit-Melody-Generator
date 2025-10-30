@@ -46,8 +46,8 @@ export const soundfontPresets: Record<string, SoundfontInstrument> = {
     category: "melody"
   },
   ambient_keys: {
-    name: "Pad Synth (New Age)",
-    soundfontName: "warm_pad",
+    name: "Pad Synth (Warm)",
+    soundfontName: "pad_2_warm",
     category: "melody"
   },
   bright_keys: {
@@ -73,8 +73,8 @@ export const soundfontPresets: Record<string, SoundfontInstrument> = {
     category: "bass"
   },
   fat_bass: {
-    name: "Bass Lead",
-    soundfontName: "bass_lead",
+    name: "Fat Bass",
+    soundfontName: "synth_bass_2",
     category: "bass"
   },
   acid_bass: {
@@ -91,7 +91,7 @@ export const soundfontPresets: Record<string, SoundfontInstrument> = {
   // HARMONY/PAD INSTRUMENTS
   warm_pad: {
     name: "Warm Pad",
-    soundfontName: "warm_pad",
+    soundfontName: "pad_2_warm",
     category: "harmony"
   },
   string_pad: {
@@ -101,7 +101,7 @@ export const soundfontPresets: Record<string, SoundfontInstrument> = {
   },
   pad_synth: {
     name: "Synth Pad",
-    soundfontName: "polysynth_pad",
+    soundfontName: "pad_3_polysynth",
     category: "harmony"
   },
   choir_pad: {
@@ -116,7 +116,7 @@ export const soundfontPresets: Record<string, SoundfontInstrument> = {
   },
   soft_pad: {
     name: "Pad (New Age)",
-    soundfontName: "new_age_pad",
+    soundfontName: "pad_1_new_age",
     category: "harmony"
   }
 };
