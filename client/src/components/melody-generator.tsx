@@ -2093,6 +2093,16 @@ export default function MelodyGeneratorComponent() {
     }
   }, [state.tempo, toneLoaded]);
 
+  // Real-time master volume changes
+  useEffect(() => {
+    if (toneLoaded && window.Tone?.Destination) {
+      // Convert 0-100 percentage to dB range (-20 to 0)
+      // Formula: (volume / 100) * 20 - 20
+      // 0% = -20dB (very quiet), 100% = 0dB (full volume)
+      window.Tone.Destination.volume.value = (state.masterVolume / 100) * 20 - 20;
+    }
+  }, [state.masterVolume, toneLoaded]);
+
   useEffect(() => {
     if (state.metronomeEnabled && toneLoaded) {
       stopMetronome();
@@ -2197,9 +2207,7 @@ export default function MelodyGeneratorComponent() {
                 value={[state.masterVolume]}
                 onValueChange={(value) => {
                   setState(prev => ({ ...prev, masterVolume: value[0] }));
-                  if (window.Tone?.Destination) {
-                    window.Tone.Destination.volume.value = (value[0] / 100) * 20 - 20;
-                  }
+                  // Volume is applied via useEffect
                 }}
                 min={0}
                 max={100}
