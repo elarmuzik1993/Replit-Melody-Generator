@@ -950,6 +950,8 @@ export default function MelodyGeneratorComponent() {
       }
 
       const bassInstrument = getSoundfontName(state.tracks.bass.synthType);
+      console.log(`Bass synth type: ${state.tracks.bass.synthType}, mapped to: ${bassInstrument}`);
+
       bassSoundfontRef.current = new SoundfontPlayer(context, {
         instrument: bassInstrument,
         volume: state.tracks.bass.volume,
@@ -961,6 +963,8 @@ export default function MelodyGeneratorComponent() {
       });
 
       const melodyInstrument = getSoundfontName(state.tracks.melody.synthType);
+      console.log(`Melody synth type: ${state.tracks.melody.synthType}, mapped to: ${melodyInstrument}`);
+
       melodySoundfontRef.current = new SoundfontPlayer(context, {
         instrument: melodyInstrument,
         volume: state.tracks.melody.volume,
@@ -972,6 +976,8 @@ export default function MelodyGeneratorComponent() {
       });
 
       const harmonyInstrument = getSoundfontName(state.tracks.harmony.synthType);
+      console.log(`Harmony synth type: ${state.tracks.harmony.synthType}, mapped to: ${harmonyInstrument}`);
+
       harmonySoundfontRef.current = new SoundfontPlayer(context, {
         instrument: harmonyInstrument,
         volume: state.tracks.harmony.volume,
