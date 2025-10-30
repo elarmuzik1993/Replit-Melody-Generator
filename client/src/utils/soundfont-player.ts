@@ -158,8 +158,9 @@ export class SoundfontPlayer {
    */
   private async loadInstrument(): Promise<void> {
     try {
-      console.log(`Loading soundfont ${this.instrumentName}...`);
-      console.log('Master gain node:', this.masterGain);
+      console.log(`[SoundfontPlayer] Loading soundfont "${this.instrumentName}"...`);
+      console.log('[SoundfontPlayer] Master gain node:', this.masterGain);
+      console.log('[SoundfontPlayer] AudioContext:', this.context);
 
       // Create soundfont with output connected to our effects chain
       this.instrument = new Soundfont(this.context, {
@@ -167,16 +168,21 @@ export class SoundfontPlayer {
         destination: this.masterGain // Connect to our gain node instead of context.destination
       });
 
-      console.log('Soundfont instrument created:', this.instrument);
+      console.log('[SoundfontPlayer] Soundfont instance created:', this.instrument);
 
       // Wait for instrument to be ready - test by attempting to load a note
       await this.waitForInstrumentReady();
 
       this.isLoaded = true;
-      console.log(`✓ Loaded soundfont: ${this.instrumentName}`);
+      console.log(`[SoundfontPlayer] ✓ Successfully loaded: ${this.instrumentName}`);
     } catch (error) {
-      console.error(`✗ Failed to load soundfont ${this.instrumentName}:`, error);
-      throw error;
+      console.error(`[SoundfontPlayer] ✗ FAILED to load "${this.instrumentName}":`, error);
+      console.error('[SoundfontPlayer] Error details:', {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack
+      });
+      throw new Error(`Failed to load soundfont "${this.instrumentName}": ${(error as Error).message}`);
     }
   }
 
@@ -187,16 +193,19 @@ export class SoundfontPlayer {
     const maxAttempts = 50;
     const delayMs = 100;
 
+    console.log(`[SoundfontPlayer] Waiting for instrument "${this.instrumentName}" to be ready...`);
+
     for (let i = 0; i < maxAttempts; i++) {
       try {
         // Try to access instrument properties
         if (this.instrument && this.instrument.loaded !== false) {
+          console.log(`[SoundfontPlayer] Instrument ready after ${i * delayMs}ms`);
           // Give it a bit more time to fully initialize
           await new Promise(resolve => setTimeout(resolve, delayMs));
           return;
         }
       } catch (e) {
-        // Instrument not ready yet
+        console.warn(`[SoundfontPlayer] Attempt ${i + 1}/${maxAttempts} - not ready yet:`, e);
       }
 
       await new Promise(resolve => setTimeout(resolve, delayMs));
