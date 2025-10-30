@@ -924,6 +924,10 @@ export default function MelodyGeneratorComponent() {
       const context = window.Tone.context.rawContext as AudioContext;
       audioContextRef.current = context;
 
+      console.log('Initializing soundfonts with Tone context:', context);
+      console.log('Context destination:', context.destination);
+      console.log('Tone.Destination:', window.Tone.Destination);
+
       // Dispose existing soundfont players
       if (bassSoundfontRef.current) bassSoundfontRef.current.dispose();
       if (melodySoundfontRef.current) melodySoundfontRef.current.dispose();
@@ -932,6 +936,9 @@ export default function MelodyGeneratorComponent() {
       setStatus("Loading soundfont instruments...");
 
       // Create soundfont players for each track with enhanced audio features
+      // Route through Tone.Destination for master volume control
+      const toneDestination = window.Tone.Destination.input as AudioNode;
+
       const bassInstrument = getSoundfontName(state.tracks.bass.synthType);
       bassSoundfontRef.current = new SoundfontPlayer(context, {
         instrument: bassInstrument,
@@ -939,7 +946,8 @@ export default function MelodyGeneratorComponent() {
         enableReverb: true,
         reverbAmount: 0.15, // Subtle reverb for bass
         enableCompression: true,
-        maxPolyphony: 8 // Bass typically plays single notes
+        maxPolyphony: 8, // Bass typically plays single notes
+        outputNode: toneDestination // Route through Tone.Destination
       });
 
       const melodyInstrument = getSoundfontName(state.tracks.melody.synthType);
@@ -949,7 +957,8 @@ export default function MelodyGeneratorComponent() {
         enableReverb: true,
         reverbAmount: 0.25, // More reverb for melody
         enableCompression: true,
-        maxPolyphony: 16 // Melody can have overlapping notes
+        maxPolyphony: 16, // Melody can have overlapping notes
+        outputNode: toneDestination // Route through Tone.Destination
       });
 
       const harmonyInstrument = getSoundfontName(state.tracks.harmony.synthType);
@@ -959,7 +968,8 @@ export default function MelodyGeneratorComponent() {
         enableReverb: true,
         reverbAmount: 0.3, // Most reverb for harmony/pads
         enableCompression: true,
-        maxPolyphony: 24 // Harmony can have chords
+        maxPolyphony: 24, // Harmony can have chords
+        outputNode: toneDestination // Route through Tone.Destination
       });
 
       // Ensure all instruments are loaded
@@ -2095,9 +2105,11 @@ export default function MelodyGeneratorComponent() {
   useEffect(() => {
     if (toneLoaded && window.Tone?.Destination) {
       // Convert 0-100 percentage to dB range (-20 to 0)
-      // Formula: (volume / 100) * 20 - 20
-      // 0% = -20dB (very quiet), 100% = 0dB (full volume)
-      window.Tone.Destination.volume.value = (state.masterVolume / 100) * 20 - 20;
+      const dbValue = (state.masterVolume / 100) * 20 - 20;
+      window.Tone.Destination.volume.value = dbValue;
+      console.log(`Master volume set to ${state.masterVolume}% (${dbValue.toFixed(2)}dB)`);
+      console.log('Tone.Destination:', window.Tone.Destination);
+      console.log('AudioContext:', window.Tone.context);
     }
   }, [state.masterVolume, toneLoaded]);
 

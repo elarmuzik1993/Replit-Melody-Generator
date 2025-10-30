@@ -14,6 +14,7 @@ export interface SoundfontPlayerOptions {
   enableCompression?: boolean;
   filterCutoff?: number; // Hz, for low-pass filter
   maxPolyphony?: number; // Maximum simultaneous notes
+  outputNode?: AudioNode; // Custom output node (for Tone.Destination)
 }
 
 export interface PlayNoteOptions {
@@ -95,20 +96,23 @@ export class SoundfontPlayer {
       currentNode = this.filter;
     }
 
+    // Final output destination
+    const finalDestination = options.outputNode || this.context.destination;
+
     // Reverb (creates spatial depth)
     if (options.enableReverb) {
-      this.setupReverb(options.reverbAmount ?? 0.2);
+      this.setupReverb(options.reverbAmount ?? 0.2, finalDestination);
       currentNode.connect(this.dryGain!);
     } else {
-      // Connect to context destination (will be Tone.Destination if using Tone.context)
-      currentNode.connect(this.context.destination);
+      // Connect to specified output or context destination
+      currentNode.connect(finalDestination);
     }
   }
 
   /**
    * Set up reverb effect with impulse response
    */
-  private setupReverb(reverbAmount: number): void {
+  private setupReverb(reverbAmount: number, destination: AudioNode): void {
     // Create dry/wet mix
     this.dryGain = this.context.createGain();
     this.reverbGain = this.context.createGain();
@@ -121,10 +125,10 @@ export class SoundfontPlayer {
     // Generate simple reverb impulse response
     this.generateReverbImpulse();
 
-    // Connect reverb path
-    this.dryGain.connect(this.context.destination);
+    // Connect reverb path to specified destination
+    this.dryGain.connect(destination);
     this.reverbGain.connect(this.convolver);
-    this.convolver.connect(this.context.destination);
+    this.convolver.connect(destination);
   }
 
   /**
