@@ -950,7 +950,8 @@ export default function MelodyGeneratorComponent() {
       }
 
       const bassInstrument = getSoundfontName(state.tracks.bass.synthType);
-      console.log(`Bass synth type: ${state.tracks.bass.synthType}, mapped to: ${bassInstrument}`);
+      console.log(`[Init] Bass synth type: ${state.tracks.bass.synthType}, mapped to: ${bassInstrument}`);
+      console.log(`[Init] Creating bass SoundfontPlayer...`);
 
       bassSoundfontRef.current = new SoundfontPlayer(context, {
         instrument: bassInstrument,
@@ -961,6 +962,7 @@ export default function MelodyGeneratorComponent() {
         maxPolyphony: 8, // Bass typically plays single notes
         outputNode: toneDestination // Route through Tone.Destination
       });
+      console.log(`[Init] Bass SoundfontPlayer created successfully`);
 
       const melodyInstrument = getSoundfontName(state.tracks.melody.synthType);
       console.log(`Melody synth type: ${state.tracks.melody.synthType}, mapped to: ${melodyInstrument}`);
@@ -989,11 +991,13 @@ export default function MelodyGeneratorComponent() {
       });
 
       // Ensure all instruments are loaded
+      console.log('[Init] Starting to load all instruments...');
       await Promise.all([
         bassSoundfontRef.current.ensureLoaded(),
         melodySoundfontRef.current.ensureLoaded(),
         harmonySoundfontRef.current.ensureLoaded()
       ]);
+      console.log('[Init] All instruments loaded successfully!');
 
       setSoundfontsLoaded(true);
       setIsLoadingSoundfonts(false);

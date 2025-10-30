@@ -163,10 +163,17 @@ export class SoundfontPlayer {
       console.log('[SoundfontPlayer] AudioContext:', this.context);
 
       // Create soundfont with output connected to our effects chain
+      console.log('[SoundfontPlayer] Calling Soundfont constructor with params:', {
+        instrument: this.instrumentName,
+        destination: this.masterGain
+      });
+
       this.instrument = new Soundfont(this.context, {
         instrument: this.instrumentName,
         destination: this.masterGain // Connect to our gain node instead of context.destination
       });
+
+      console.log('[SoundfontPlayer] Soundfont constructor returned:', this.instrument);
 
       console.log('[SoundfontPlayer] Soundfont instance created:', this.instrument);
 
