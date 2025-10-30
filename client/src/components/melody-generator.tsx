@@ -927,6 +927,7 @@ export default function MelodyGeneratorComponent() {
       console.log('Initializing soundfonts with Tone context:', context);
       console.log('Context destination:', context.destination);
       console.log('Tone.Destination:', window.Tone.Destination);
+      console.log('Tone.Destination type:', typeof window.Tone.Destination);
 
       // Dispose existing soundfont players
       if (bassSoundfontRef.current) bassSoundfontRef.current.dispose();
@@ -937,11 +938,16 @@ export default function MelodyGeneratorComponent() {
 
       // Create soundfont players for each track with enhanced audio features
       // Route through Tone.Destination for master volume control
-      // Tone.Destination is a Gain node, so we can connect directly to it
-      const toneDestination = window.Tone.Destination as unknown as AudioNode;
+      let toneDestination: AudioNode;
 
-      console.log('Tone.Destination type:', window.Tone.Destination);
-      console.log('Using destination:', toneDestination);
+      try {
+        // Try to get Tone.Destination as AudioNode
+        toneDestination = window.Tone.Destination as unknown as AudioNode;
+        console.log('✓ Got Tone.Destination:', toneDestination);
+      } catch (err) {
+        console.error('✗ Failed to get Tone.Destination, using context.destination:', err);
+        toneDestination = context.destination;
+      }
 
       const bassInstrument = getSoundfontName(state.tracks.bass.synthType);
       bassSoundfontRef.current = new SoundfontPlayer(context, {
@@ -1170,7 +1176,11 @@ export default function MelodyGeneratorComponent() {
   // Initialize soundfonts automatically when Tone.js loads (for Transport timing)
   useEffect(() => {
     if (toneLoaded) {
-      initializeSoundfonts();
+      console.log('Tone loaded, initializing soundfonts...');
+      initializeSoundfonts().catch(err => {
+        console.error('Failed to initialize soundfonts:', err);
+        setStatus('Error loading soundfonts: ' + err.message);
+      });
     }
   }, [toneLoaded, state.tracks.melody.synthType, state.tracks.bass.synthType, state.tracks.harmony.synthType]);
 

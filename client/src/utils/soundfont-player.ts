@@ -158,11 +158,16 @@ export class SoundfontPlayer {
    */
   private async loadInstrument(): Promise<void> {
     try {
+      console.log(`Loading soundfont ${this.instrumentName}...`);
+      console.log('Master gain node:', this.masterGain);
+
       // Create soundfont with output connected to our effects chain
       this.instrument = new Soundfont(this.context, {
         instrument: this.instrumentName,
         destination: this.masterGain // Connect to our gain node instead of context.destination
       });
+
+      console.log('Soundfont instrument created:', this.instrument);
 
       // Wait for instrument to be ready - test by attempting to load a note
       await this.waitForInstrumentReady();
