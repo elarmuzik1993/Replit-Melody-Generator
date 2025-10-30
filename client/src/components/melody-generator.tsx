@@ -937,7 +937,11 @@ export default function MelodyGeneratorComponent() {
 
       // Create soundfont players for each track with enhanced audio features
       // Route through Tone.Destination for master volume control
-      const toneDestination = window.Tone.Destination.input as AudioNode;
+      // Tone.Destination is a Gain node, so we can connect directly to it
+      const toneDestination = window.Tone.Destination as unknown as AudioNode;
+
+      console.log('Tone.Destination type:', window.Tone.Destination);
+      console.log('Using destination:', toneDestination);
 
       const bassInstrument = getSoundfontName(state.tracks.bass.synthType);
       bassSoundfontRef.current = new SoundfontPlayer(context, {
