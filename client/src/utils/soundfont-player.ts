@@ -43,6 +43,7 @@ export class SoundfontPlayer {
   private convolver?: ConvolverNode;
   private reverbGain?: GainNode;
   private dryGain?: GainNode;
+  private outputNode?: AudioNode;
 
   // Performance tracking
   private activeNotes: Set<number> = new Set();
@@ -96,23 +97,21 @@ export class SoundfontPlayer {
       currentNode = this.filter;
     }
 
-    // Final output destination
-    const finalDestination = options.outputNode || this.context.destination;
-
     // Reverb (creates spatial depth)
     if (options.enableReverb) {
-      this.setupReverb(options.reverbAmount ?? 0.2, finalDestination);
+      this.setupReverb(options.reverbAmount ?? 0.2);
       currentNode.connect(this.dryGain!);
-    } else {
-      // Connect to specified output or context destination
-      currentNode.connect(finalDestination);
     }
+
+    // Store the output node for later connection
+    // We'll connect to it after the instrument is created
+    this.outputNode = options.outputNode;
   }
 
   /**
    * Set up reverb effect with impulse response
    */
-  private setupReverb(reverbAmount: number, destination: AudioNode): void {
+  private setupReverb(reverbAmount: number): void {
     // Create dry/wet mix
     this.dryGain = this.context.createGain();
     this.reverbGain = this.context.createGain();
@@ -125,10 +124,8 @@ export class SoundfontPlayer {
     // Generate simple reverb impulse response
     this.generateReverbImpulse();
 
-    // Connect reverb path to specified destination
-    this.dryGain.connect(destination);
+    // Connect reverb path - will connect to final destination after instrument loads
     this.reverbGain.connect(this.convolver);
-    this.convolver.connect(destination);
   }
 
   /**
@@ -180,6 +177,9 @@ export class SoundfontPlayer {
       // Wait for instrument to be ready - test by attempting to load a note
       await this.waitForInstrumentReady();
 
+      // Now connect the effects chain to the final destination
+      this.connectToDestination();
+
       this.isLoaded = true;
       console.log(`[SoundfontPlayer] ✓ Successfully loaded: ${this.instrumentName}`);
     } catch (error) {
@@ -190,6 +190,34 @@ export class SoundfontPlayer {
         stack: (error as Error).stack
       });
       throw new Error(`Failed to load soundfont "${this.instrumentName}": ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Connect the effects chain to the final destination
+   */
+  private connectToDestination(): void {
+    const finalDestination = this.outputNode || this.context.destination;
+
+    console.log('[SoundfontPlayer] Connecting to destination:', finalDestination);
+
+    if (this.dryGain && this.convolver) {
+      // Reverb is enabled - connect both dry and wet paths
+      this.dryGain.connect(finalDestination);
+      this.convolver.connect(finalDestination);
+      console.log('[SoundfontPlayer] Connected reverb paths to destination');
+    } else {
+      // No reverb - find the last node in the effects chain
+      let lastNode: AudioNode = this.masterGain;
+
+      if (this.filter) {
+        lastNode = this.filter;
+      } else if (this.compressor) {
+        lastNode = this.compressor;
+      }
+
+      lastNode.connect(finalDestination);
+      console.log('[SoundfontPlayer] Connected effects chain to destination');
     }
   }
 
