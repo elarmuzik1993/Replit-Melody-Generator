@@ -2085,11 +2085,13 @@ export default function MelodyGeneratorComponent() {
     }
   }, [state.noteCount, state.hasGeneratedMelody]);
 
+  // Real-time tempo changes during playback
   useEffect(() => {
-    if (state.metronomeEnabled && metronomeSequenceRef.current && window.Tone) {
+    if (toneLoaded && window.Tone) {
+      // Update Transport BPM in real-time (works even during playback)
       window.Tone.Transport.bpm.value = state.tempo;
     }
-  }, [state.tempo, state.metronomeEnabled]);
+  }, [state.tempo, toneLoaded]);
 
   useEffect(() => {
     if (state.metronomeEnabled && toneLoaded) {
