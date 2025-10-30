@@ -3,9 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Square, Info, RotateCcw, Clock, Download, Volume2, VolumeX, RefreshCw } from "lucide-react";
+import { Play, Square, Info, RotateCcw, Clock, Download, Volume2, VolumeX, RefreshCw, Loader2 } from "lucide-react";
 // @ts-ignore - midi-writer-js doesn't have TypeScript definitions
 import MidiWriter from "midi-writer-js";
+import { SoundfontPlayer } from "@/utils/soundfont-player";
+import { soundfontPresets, getSoundfontName } from "@/utils/soundfont-config";
+import { LoadingSpinner, InlineLoading, LoadingDots } from "@/components/ui/loading-spinner";
 
 // Import Tone.js
 declare global {
@@ -885,46 +888,98 @@ export default function MelodyGeneratorComponent() {
   });
 
   const [status, setStatus] = useState("Loading audio engine...");
-  const [toneLoaded, setToneLoaded] = useState(false);
-  
-  // Three separate synth instances for each track
-  const bassSynthRef = useRef<any>(null);
-  const melodySynthRef = useRef<any>(null);
-  const harmonySynthRef = useRef<any>(null);
-  
+  const [toneLoaded, setToneLoaded] = useState(false); // Still needed for Transport timing
+  const [soundfontsLoaded, setSoundfontsLoaded] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingSoundfonts, setIsLoadingSoundfonts] = useState(false);
+
+  // Soundfont player instances (primary audio engine)
+  const bassSoundfontRef = useRef<SoundfontPlayer | null>(null);
+  const melodySoundfontRef = useRef<SoundfontPlayer | null>(null);
+  const harmonySoundfontRef = useRef<SoundfontPlayer | null>(null);
+
+  // Audio context for soundfonts
+  const audioContextRef = useRef<AudioContext | null>(null);
+
   // Three separate sequence instances for synchronized playback
   const bassSequenceRef = useRef<any>(null);
   const melodySequenceRef = useRef<any>(null);
   const harmonySequenceRef = useRef<any>(null);
-  
+
   const metronomeRef = useRef<any>(null);
   const metronomeSequenceRef = useRef<any>(null);
 
   // Step sequencer for continuous LED indicator
   const stepSequencerRef = useRef<any>(null);
 
-  const initializeSynths = () => {
-    if (!toneLoaded) return;
-    
-    // Dispose existing synths
-    if (bassSynthRef.current) bassSynthRef.current.dispose();
-    if (melodySynthRef.current) melodySynthRef.current.dispose();
-    if (harmonySynthRef.current) harmonySynthRef.current.dispose();
-    
-    // Create bass synth using track-specific preset
-    const bassPreset = synthPresets[state.tracks.bass.synthType as keyof typeof synthPresets];
-    bassSynthRef.current = bassPreset.config();
-    bassSynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.bass.volume) - 6;
-    
-    // Create melody synth using track-specific preset
-    const melodyPreset = synthPresets[state.tracks.melody.synthType as keyof typeof synthPresets];
-    melodySynthRef.current = melodyPreset.config();
-    melodySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.melody.volume);
-    
-    // Create harmony synth using track-specific preset
-    const harmonyPreset = synthPresets[state.tracks.harmony.synthType as keyof typeof synthPresets];
-    harmonySynthRef.current = harmonyPreset.config();
-    harmonySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.harmony.volume) - 8;
+  // Removed: initializeSynths - now using soundfonts exclusively
+
+  const initializeSoundfonts = async () => {
+    try {
+      setIsLoadingSoundfonts(true);
+      setSoundfontsLoaded(false);
+
+      // Create AudioContext if it doesn't exist
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext();
+      }
+
+      const context = audioContextRef.current;
+
+      // Dispose existing soundfont players
+      if (bassSoundfontRef.current) bassSoundfontRef.current.dispose();
+      if (melodySoundfontRef.current) melodySoundfontRef.current.dispose();
+      if (harmonySoundfontRef.current) harmonySoundfontRef.current.dispose();
+
+      setStatus("Loading soundfont instruments...");
+
+      // Create soundfont players for each track with enhanced audio features
+      const bassInstrument = getSoundfontName(state.tracks.bass.synthType);
+      bassSoundfontRef.current = new SoundfontPlayer(context, {
+        instrument: bassInstrument,
+        volume: state.tracks.bass.volume,
+        enableReverb: true,
+        reverbAmount: 0.15, // Subtle reverb for bass
+        enableCompression: true,
+        maxPolyphony: 8 // Bass typically plays single notes
+      });
+
+      const melodyInstrument = getSoundfontName(state.tracks.melody.synthType);
+      melodySoundfontRef.current = new SoundfontPlayer(context, {
+        instrument: melodyInstrument,
+        volume: state.tracks.melody.volume,
+        enableReverb: true,
+        reverbAmount: 0.25, // More reverb for melody
+        enableCompression: true,
+        maxPolyphony: 16 // Melody can have overlapping notes
+      });
+
+      const harmonyInstrument = getSoundfontName(state.tracks.harmony.synthType);
+      harmonySoundfontRef.current = new SoundfontPlayer(context, {
+        instrument: harmonyInstrument,
+        volume: state.tracks.harmony.volume,
+        enableReverb: true,
+        reverbAmount: 0.3, // Most reverb for harmony/pads
+        enableCompression: true,
+        maxPolyphony: 24 // Harmony can have chords
+      });
+
+      // Ensure all instruments are loaded
+      await Promise.all([
+        bassSoundfontRef.current.ensureLoaded(),
+        melodySoundfontRef.current.ensureLoaded(),
+        harmonySoundfontRef.current.ensureLoaded()
+      ]);
+
+      setSoundfontsLoaded(true);
+      setIsLoadingSoundfonts(false);
+      setStatus("Soundfonts loaded successfully!");
+    } catch (error) {
+      console.error("Error loading soundfonts:", error);
+      setStatus("Error loading soundfonts. Falling back to Tone.js");
+      setIsLoadingSoundfonts(false);
+      setUseSoundfonts(false);
+    }
   };
 
   const noteToMidi = (noteName: string): number => {
@@ -1100,24 +1155,27 @@ export default function MelodyGeneratorComponent() {
     };
   }, []);
 
+  // Initialize soundfonts automatically when Tone.js loads (for Transport timing)
   useEffect(() => {
-    initializeSynths();
+    if (toneLoaded) {
+      initializeSoundfonts();
+    }
   }, [toneLoaded, state.tracks.melody.synthType, state.tracks.bass.synthType, state.tracks.harmony.synthType]);
 
-  // Update synth volumes dynamically when state changes
+  // Update soundfont volumes dynamically when state changes
   useEffect(() => {
-    if (!toneLoaded) return;
-    
-    if (bassSynthRef.current) {
-      bassSynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.bass.volume) - 6;
+    if (soundfontsLoaded) {
+      if (bassSoundfontRef.current) {
+        bassSoundfontRef.current.volume = state.tracks.bass.volume;
+      }
+      if (melodySoundfontRef.current) {
+        melodySoundfontRef.current.volume = state.tracks.melody.volume;
+      }
+      if (harmonySoundfontRef.current) {
+        harmonySoundfontRef.current.volume = state.tracks.harmony.volume;
+      }
     }
-    if (melodySynthRef.current) {
-      melodySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.melody.volume);
-    }
-    if (harmonySynthRef.current) {
-      harmonySynthRef.current.volume.value = window.Tone.gainToDb(state.tracks.harmony.volume) - 8;
-    }
-  }, [state.tracks.bass.volume, state.tracks.melody.volume, state.tracks.harmony.volume, toneLoaded]);
+  }, [state.tracks.bass.volume, state.tracks.melody.volume, state.tracks.harmony.volume, soundfontsLoaded]);
 
   const generateMelody = () => {
     setStatus("Generating melody...");
@@ -1572,12 +1630,15 @@ export default function MelodyGeneratorComponent() {
   };
 
   const generateAllTracks = () => {
+    setIsGenerating(true);
     setStatus("Generating all tracks...");
 
-    // Generate rhythm-aware tracks
-    const bassTrackWithTiming = generateTrackWithTiming('bass');
-    const melodyTrackWithTiming = generateMelodyWithStructure(); // Use enhanced melody generator
-    const harmonyTrackWithTiming = generateTrackWithTiming('harmony', melodyTrackWithTiming);
+    // Small delay to show loading state
+    setTimeout(() => {
+      // Generate rhythm-aware tracks
+      const bassTrackWithTiming = generateTrackWithTiming('bass');
+      const melodyTrackWithTiming = generateMelodyWithStructure(); // Use enhanced melody generator
+      const harmonyTrackWithTiming = generateTrackWithTiming('harmony', melodyTrackWithTiming);
 
     // Also create simple note arrays for backward compatibility
     const bassTrack = bassTrackWithTiming.map(n => n.note);
@@ -1615,11 +1676,19 @@ export default function MelodyGeneratorComponent() {
       hasGeneratedMelody: true
     }));
 
-    setStatus("All tracks generated! Ready to play.");
+      setStatus("All tracks generated! Ready to play.");
+      setIsGenerating(false);
+    }, 50); // Small delay to show loading animation
   };
 
   const startPlayback = async () => {
-    if (!toneLoaded || !bassSynthRef.current || !melodySynthRef.current || !harmonySynthRef.current) {
+    // Ensure soundfonts are loaded
+    if (!bassSoundfontRef.current || !melodySoundfontRef.current || !harmonySoundfontRef.current) {
+      setStatus("Soundfonts not loaded yet. Please wait...");
+      return;
+    }
+    // Also need Tone.js for Transport timing
+    if (!toneLoaded) {
       setStatus("Audio engine not loaded yet. Please wait...");
       return;
     }
@@ -1741,12 +1810,16 @@ export default function MelodyGeneratorComponent() {
 
           if (value.note && value.note !== 'rest' && value.note !== 'REST') {
             const durationInSeconds = value.duration * (60 / state.tempo) * 4;
-            bassSynthRef.current.triggerAttackRelease(
-              value.note,
-              durationInSeconds * 0.9, // Slightly shorter for articulation
-              time,
-              value.velocity
-            );
+
+            // Play using soundfont
+            if (bassSoundfontRef.current) {
+              bassSoundfontRef.current.triggerAttackRelease(
+                value.note,
+                durationInSeconds * 0.9,
+                time,
+                value.velocity
+              );
+            }
           }
         }, bassEvents);
 
@@ -1791,12 +1864,16 @@ export default function MelodyGeneratorComponent() {
             const durationInSeconds = value.duration * (60 / state.tempo) * 4;
             // Slight duration variation for humanization
             const durationVariation = 0.95 + Math.random() * 0.1; // 95%-105% of duration
-            melodySynthRef.current.triggerAttackRelease(
-              value.note,
-              durationInSeconds * 0.9 * durationVariation,
-              time,
-              value.velocity
-            );
+
+            // Play using soundfont
+            if (melodySoundfontRef.current) {
+              melodySoundfontRef.current.triggerAttackRelease(
+                value.note,
+                durationInSeconds * 0.9 * durationVariation,
+                time,
+                value.velocity
+              );
+            }
           }
         }, melodyEvents);
 
@@ -1836,12 +1913,16 @@ export default function MelodyGeneratorComponent() {
 
           if (value.note && value.note !== 'rest' && value.note !== 'REST') {
             const durationInSeconds = value.duration * (60 / state.tempo) * 4;
-            harmonySynthRef.current.triggerAttackRelease(
-              value.note,
-              durationInSeconds * 0.95, // Harmony sustains slightly longer
-              time,
-              value.velocity
-            );
+
+            // Play using soundfont
+            if (harmonySoundfontRef.current) {
+              harmonySoundfontRef.current.triggerAttackRelease(
+                value.note,
+                durationInSeconds * 0.95,
+                time,
+                value.velocity
+              );
+            }
           }
         }, harmonyEvents);
 
@@ -2017,6 +2098,16 @@ export default function MelodyGeneratorComponent() {
     }
   }, [state.timeSignature]);
 
+  // Show initial loading screen
+  if (!toneLoaded) {
+    return (
+      <div className="w-full max-w-2xl flex flex-col items-center justify-center min-h-[60vh]">
+        <LoadingSpinner size="xl" text="Loading audio engine..." />
+        <p className="text-sm text-muted-foreground mt-4">Initializing Tone.js...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-2xl">
       {/* Header Section */}
@@ -2029,10 +2120,12 @@ export default function MelodyGeneratorComponent() {
       <div className="flex gap-4 mb-6">
         <Button
           onClick={generateAllTracks}
-          className="flex-1"
+          className="flex-1 flex items-center justify-center gap-2"
+          disabled={isGenerating}
           data-testid="button-generate-all"
         >
-          Generate All Tracks
+          {isGenerating && <Loader2 className="w-4 h-4 animate-spin" />}
+          {isGenerating ? "Generating..." : "Generate All Tracks"}
         </Button>
 
         <Button
@@ -2244,6 +2337,30 @@ export default function MelodyGeneratorComponent() {
                 <SelectItem value="8">8 Bars</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Audio Engine Status */}
+          <div className="mt-6 p-4 bg-card/50 rounded-lg border border-border">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">🎹 Professional Audio Engine</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  High-quality soundfont instruments with reverb & compression
+                </p>
+              </div>
+              {soundfontsLoaded && (
+                <div className="flex items-center gap-2 text-green-500">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-medium">Ready</span>
+                </div>
+              )}
+            </div>
+            {isLoadingSoundfonts && (
+              <div className="mt-3 flex items-center gap-2 text-amber-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <p className="text-xs">Loading instruments...</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

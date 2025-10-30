@@ -48,6 +48,18 @@ Each genre controls:
 - Smart rest placement between phrases
 - Articulation and phrasing
 
+### 🎹 Professional Audio Engine (Enhanced v2.0)
+Studio-grade soundfont playback with professional audio processing:
+
+- **Realistic Instruments** - High-quality sample-based sounds (piano, bass, strings, pads, leads)
+- **Dynamic Compression** - Prevents clipping, consistent levels
+- **Convolution Reverb** - Spatial depth with per-track configuration (bass 15%, melody 25%, harmony 30%)
+- **Intelligent Polyphony** - Voice management prevents CPU spikes (8-24 notes per track)
+- **Velocity Curves** - Expressive, natural dynamics with power curve
+- **Smooth Volume Control** - 50ms ramping eliminates clicks/pops
+- **40+ Instruments** - Complete General MIDI soundfont library
+- **Web Audio Effects** - Real-time processing with zero latency
+
 ### 🥁 Roland TR-8S Style Step Sequencer
 Interactive visual sequencer for bass track:
 - **16/32 steps** based on loop length (4 or 8 bars)
@@ -101,6 +113,10 @@ Download generated compositions as standard MIDI files (.mid) compatible with al
   - Multiple synthesizer types
   - Precise timing and scheduling
   - Effects and signal processing
+- **smplr** - Soundfont player for realistic instruments
+  - Sample-based playback
+  - General MIDI soundfont library
+  - Online sample hosting
 
 ### Libraries
 - **midi-writer-js** - MIDI file export
@@ -128,6 +144,7 @@ Download generated compositions as standard MIDI files (.mid) compatible with al
 │   ├── GENRE_SYSTEM.md               # Genre specifications
 │   ├── MELODY_GENERATION_IMPROVEMENTS.md  # Algorithm details
 │   ├── STEP_SEQUENCER.md             # Sequencer documentation
+│   ├── SOUNDFONT_INTEGRATION.md      # Soundfont system documentation
 │   ├── STYLING_GUIDE.md              # UI design system
 │   └── PROJECT_OVERVIEW.md           # High-level overview
 └── README.md
@@ -202,6 +219,7 @@ Comprehensive documentation available in the `/docs` folder:
 - **[GENRE_SYSTEM.md](./GENRE_SYSTEM.md)** - Genre characteristics and implementation
 - **[MELODY_GENERATION_IMPROVEMENTS.md](./MELODY_GENERATION_IMPROVEMENTS.md)** - Algorithm details and humanization phases
 - **[STEP_SEQUENCER.md](./STEP_SEQUENCER.md)** - Step sequencer system documentation
+- **[SOUNDFONT_INTEGRATION.md](./SOUNDFONT_INTEGRATION.md)** - Dual audio engine system with soundfonts
 - **[STYLING_GUIDE.md](./STYLING_GUIDE.md)** - UI design system and color palette
 - **[PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md)** - High-level project overview
 
