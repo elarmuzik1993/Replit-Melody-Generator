@@ -919,12 +919,10 @@ export default function MelodyGeneratorComponent() {
       setIsLoadingSoundfonts(true);
       setSoundfontsLoaded(false);
 
-      // Create AudioContext if it doesn't exist
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContext();
-      }
-
-      const context = audioContextRef.current;
+      // Use Tone.js AudioContext so master volume works
+      // This ensures soundfonts route through Tone.Destination
+      const context = window.Tone.context.rawContext as AudioContext;
+      audioContextRef.current = context;
 
       // Dispose existing soundfont players
       if (bassSoundfontRef.current) bassSoundfontRef.current.dispose();

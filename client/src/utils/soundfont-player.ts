@@ -100,6 +100,7 @@ export class SoundfontPlayer {
       this.setupReverb(options.reverbAmount ?? 0.2);
       currentNode.connect(this.dryGain!);
     } else {
+      // Connect to context destination (will be Tone.Destination if using Tone.context)
       currentNode.connect(this.context.destination);
     }
   }
