@@ -9,6 +9,15 @@ import MidiWriter from "midi-writer-js";
 import { SoundfontPlayer } from "@/utils/soundfont-player";
 import { soundfontPresets, getSoundfontName } from "@/utils/soundfont-config";
 import { LoadingSpinner, InlineLoading, LoadingDots } from "@/components/ui/loading-spinner";
+// Refactored modules
+import { scales, keys, scaleWeights, intervalQuality } from "@/config/scales";
+import { rhythmPatterns, timeSignatures } from "@/config/rhythms";
+import { chordProgressions, getChordTones } from "@/config/chords";
+import { genreStyles, type GenreStyle } from "@/config/genres";
+import { NoteWithTiming, TrackData, MultiTrackState, type TrackType } from "@/types/music";
+import { weightedRandomSelect, calculateInterval, applyStepwiseBias } from "@/utils/music/noteUtils";
+import { getComplementaryInterval } from "@/utils/music/harmonyUtils";
+import { exportToMidi } from "@/utils/midi/midiExporter";
 
 // Import Tone.js
 declare global {
