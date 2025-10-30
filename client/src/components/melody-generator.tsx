@@ -959,8 +959,8 @@ export default function MelodyGeneratorComponent() {
         enableReverb: true,
         reverbAmount: 0.15, // Subtle reverb for bass
         enableCompression: true,
-        maxPolyphony: 8, // Bass typically plays single notes
-        outputNode: toneDestination // Route through Tone.Destination
+        maxPolyphony: 8 // Bass typically plays single notes
+        // Note: Not using outputNode - connecting to context.destination directly
       });
       console.log(`[Init] Bass SoundfontPlayer created successfully`);
 
@@ -973,8 +973,7 @@ export default function MelodyGeneratorComponent() {
         enableReverb: true,
         reverbAmount: 0.25, // More reverb for melody
         enableCompression: true,
-        maxPolyphony: 16, // Melody can have overlapping notes
-        outputNode: toneDestination // Route through Tone.Destination
+        maxPolyphony: 16 // Melody can have overlapping notes
       });
 
       const harmonyInstrument = getSoundfontName(state.tracks.harmony.synthType);
@@ -986,8 +985,7 @@ export default function MelodyGeneratorComponent() {
         enableReverb: true,
         reverbAmount: 0.3, // Most reverb for harmony/pads
         enableCompression: true,
-        maxPolyphony: 24, // Harmony can have chords
-        outputNode: toneDestination // Route through Tone.Destination
+        maxPolyphony: 24 // Harmony can have chords
       });
 
       // Ensure all instruments are loaded
@@ -1195,19 +1193,22 @@ export default function MelodyGeneratorComponent() {
   }, [toneLoaded, state.tracks.melody.synthType, state.tracks.bass.synthType, state.tracks.harmony.synthType]);
 
   // Update soundfont volumes dynamically when state changes
+  // Apply master volume as a multiplier to each track's volume
   useEffect(() => {
     if (soundfontsLoaded) {
+      const masterGain = state.masterVolume / 100;
+
       if (bassSoundfontRef.current) {
-        bassSoundfontRef.current.volume = state.tracks.bass.volume;
+        bassSoundfontRef.current.volume = state.tracks.bass.volume * masterGain;
       }
       if (melodySoundfontRef.current) {
-        melodySoundfontRef.current.volume = state.tracks.melody.volume;
+        melodySoundfontRef.current.volume = state.tracks.melody.volume * masterGain;
       }
       if (harmonySoundfontRef.current) {
-        harmonySoundfontRef.current.volume = state.tracks.harmony.volume;
+        harmonySoundfontRef.current.volume = state.tracks.harmony.volume * masterGain;
       }
     }
-  }, [state.tracks.bass.volume, state.tracks.melody.volume, state.tracks.harmony.volume, soundfontsLoaded]);
+  }, [state.tracks.bass.volume, state.tracks.melody.volume, state.tracks.harmony.volume, state.masterVolume, soundfontsLoaded]);
 
   const generateMelody = () => {
     setStatus("Generating melody...");
@@ -2124,18 +2125,6 @@ export default function MelodyGeneratorComponent() {
       window.Tone.Transport.bpm.value = state.tempo;
     }
   }, [state.tempo, toneLoaded]);
-
-  // Real-time master volume changes
-  useEffect(() => {
-    if (toneLoaded && window.Tone?.Destination) {
-      // Convert 0-100 percentage to dB range (-20 to 0)
-      const dbValue = (state.masterVolume / 100) * 20 - 20;
-      window.Tone.Destination.volume.value = dbValue;
-      console.log(`Master volume set to ${state.masterVolume}% (${dbValue.toFixed(2)}dB)`);
-      console.log('Tone.Destination:', window.Tone.Destination);
-      console.log('AudioContext:', window.Tone.context);
-    }
-  }, [state.masterVolume, toneLoaded]);
 
   useEffect(() => {
     if (state.metronomeEnabled && toneLoaded) {

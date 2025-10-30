@@ -197,27 +197,34 @@ export class SoundfontPlayer {
    * Connect the effects chain to the final destination
    */
   private connectToDestination(): void {
-    const finalDestination = this.outputNode || this.context.destination;
+    // Always use context.destination for now to avoid Tone.Destination issues
+    // We'll handle master volume control differently
+    const finalDestination = this.context.destination;
 
-    console.log('[SoundfontPlayer] Connecting to destination:', finalDestination);
+    console.log('[SoundfontPlayer] Connecting to context.destination');
 
-    if (this.dryGain && this.convolver) {
-      // Reverb is enabled - connect both dry and wet paths
-      this.dryGain.connect(finalDestination);
-      this.convolver.connect(finalDestination);
-      console.log('[SoundfontPlayer] Connected reverb paths to destination');
-    } else {
-      // No reverb - find the last node in the effects chain
-      let lastNode: AudioNode = this.masterGain;
+    try {
+      if (this.dryGain && this.convolver) {
+        // Reverb is enabled - connect both dry and wet paths
+        this.dryGain.connect(finalDestination);
+        this.convolver.connect(finalDestination);
+        console.log('[SoundfontPlayer] ✓ Connected reverb paths to destination');
+      } else {
+        // No reverb - find the last node in the effects chain
+        let lastNode: AudioNode = this.masterGain;
 
-      if (this.filter) {
-        lastNode = this.filter;
-      } else if (this.compressor) {
-        lastNode = this.compressor;
+        if (this.filter) {
+          lastNode = this.filter;
+        } else if (this.compressor) {
+          lastNode = this.compressor;
+        }
+
+        lastNode.connect(finalDestination);
+        console.log('[SoundfontPlayer] ✓ Connected effects chain to destination');
       }
-
-      lastNode.connect(finalDestination);
-      console.log('[SoundfontPlayer] Connected effects chain to destination');
+    } catch (error) {
+      console.error('[SoundfontPlayer] ✗ Failed to connect to destination:', error);
+      throw error;
     }
   }
 
