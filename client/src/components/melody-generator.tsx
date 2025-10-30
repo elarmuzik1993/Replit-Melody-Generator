@@ -994,9 +994,9 @@ export default function MelodyGeneratorComponent() {
       setStatus("Soundfonts loaded successfully!");
     } catch (error) {
       console.error("Error loading soundfonts:", error);
-      setStatus("Error loading soundfonts. Falling back to Tone.js");
+      setStatus("Error loading soundfonts: " + (error as Error).message);
       setIsLoadingSoundfonts(false);
-      setUseSoundfonts(false);
+      setSoundfontsLoaded(false);
     }
   };
 
