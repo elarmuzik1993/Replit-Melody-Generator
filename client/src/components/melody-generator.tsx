@@ -1938,126 +1938,99 @@ export default function MelodyGeneratorComponent() {
     });
   };
 
-  // Toggle step on/off for manual step editing
+  // Toggle step on/off for manual step editing - simplified grid-based approach
   const toggleStep = (trackType: TrackType, stepIndex: number) => {
     const stepsPerBeat = 4; // 16th note grid
+    const totalSteps = state.loopLength === 4 ? 16 : 32;
     const track = state.tracks[trackType];
-    const sequence = [...track.generatedSequenceWithTiming];
 
-    // Find which note corresponds to this step
+    // Convert current sequence to a step grid
+    const stepGrid: (NoteWithTiming | null)[] = new Array(totalSteps).fill(null);
+
     let currentBeat = 0;
-    let noteIndexAtStep = -1;
-    let isNoteStart = false;
-
-    for (let i = 0; i < sequence.length; i++) {
-      const noteData = sequence[i];
+    for (const noteData of track.generatedSequenceWithTiming) {
       const noteStartStep = Math.floor(currentBeat * stepsPerBeat);
-      const noteEndStep = Math.floor((currentBeat + noteData.duration) * stepsPerBeat);
-
-      if (noteStartStep === stepIndex) {
-        noteIndexAtStep = i;
-        isNoteStart = true;
-        break;
-      } else if (noteStartStep < stepIndex && stepIndex < noteEndStep) {
-        noteIndexAtStep = i;
-        break;
+      if (noteStartStep < totalSteps && noteData.note !== 'REST') {
+        stepGrid[noteStartStep] = noteData;
       }
-
       currentBeat += noteData.duration;
     }
 
-    // If note exists at this step, toggle it
-    if (noteIndexAtStep >= 0 && isNoteStart) {
-      // Toggle: if it's a note, make it REST; if it's REST, restore to a default note
-      const currentNote = sequence[noteIndexAtStep];
-      if (currentNote.note !== 'REST') {
-        // Turn off: make it REST
-        sequence[noteIndexAtStep] = {
-          ...currentNote,
-          note: 'REST'
-        };
-      } else {
-        // Turn on: generate a note based on the track type and scale
-        const scaleNotes = scales[state.scale as keyof typeof scales];
-        const baseNote = state.key;
-        const keyIndex = keys.indexOf(baseNote);
-        const [minOctave, maxOctave] = track.octaveRange;
-
-        // Use middle of octave range
-        const octave = Math.floor((minOctave + maxOctave) / 2);
-
-        // Pick a scale degree (tonic for simplicity)
-        const semitone = scaleNotes[0];
-        const noteIndex = (keyIndex + semitone) % 12;
-        const newNote = keys[noteIndex] + octave;
-
-        sequence[noteIndexAtStep] = {
-          ...currentNote,
-          note: newNote
-        };
-      }
-
-      // Update state
-      setState(prev => ({
-        ...prev,
-        tracks: {
-          ...prev.tracks,
-          [trackType]: {
-            ...prev.tracks[trackType],
-            generatedSequenceWithTiming: sequence
-          }
-        }
-      }));
-    } else if (noteIndexAtStep < 0) {
-      // No note at this step - create a new note at this position
-      // Calculate the beat position for this step
-      const beatPosition = stepIndex / stepsPerBeat;
-      const defaultDuration = 0.25; // 16th note
-
-      // Find where to insert this note in the sequence
-      currentBeat = 0;
-      let insertIndex = 0;
-      for (let i = 0; i < sequence.length; i++) {
-        if (currentBeat >= beatPosition) {
-          insertIndex = i;
-          break;
-        }
-        currentBeat += sequence[i].duration;
-        insertIndex = i + 1;
-      }
-
-      // Generate a note
+    // Toggle the clicked step
+    if (stepGrid[stepIndex]) {
+      // Delete the note at this step
+      stepGrid[stepIndex] = null;
+    } else {
+      // Add a note at this step
       const scaleNotes = scales[state.scale as keyof typeof scales];
       const baseNote = state.key;
       const keyIndex = keys.indexOf(baseNote);
       const [minOctave, maxOctave] = track.octaveRange;
       const octave = Math.floor((minOctave + maxOctave) / 2);
-      const semitone = scaleNotes[0];
-      const noteIndex = (keyIndex + semitone) % 12;
+
+      // Pick a random scale degree for variety
+      const randomDegree = scaleNotes[Math.floor(Math.random() * scaleNotes.length)];
+      const noteIndex = (keyIndex + randomDegree) % 12;
       const newNote = keys[noteIndex] + octave;
 
-      // Insert new note
-      const newNoteData: NoteWithTiming = {
+      stepGrid[stepIndex] = {
         note: newNote,
-        duration: defaultDuration,
+        duration: 0.25, // 16th note
+        timing: stepIndex / stepsPerBeat,
         velocity: 80
       };
-
-      // If we're inserting in the middle, we may need to split existing notes
-      // For simplicity, just insert at the position
-      sequence.splice(insertIndex, 0, newNoteData);
-
-      setState(prev => ({
-        ...prev,
-        tracks: {
-          ...prev.tracks,
-          [trackType]: {
-            ...prev.tracks[trackType],
-            generatedSequenceWithTiming: sequence
-          }
-        }
-      }));
     }
+
+    // Convert grid back to sequence format
+    const newSequence: NoteWithTiming[] = [];
+    let i = 0;
+    while (i < totalSteps) {
+      if (stepGrid[i]) {
+        // Add the note
+        newSequence.push(stepGrid[i]!);
+        i++;
+      } else {
+        // Count consecutive empty steps and add as REST
+        let restDuration = 0;
+        while (i < totalSteps && !stepGrid[i]) {
+          restDuration += 0.25;
+          i++;
+        }
+        if (restDuration > 0) {
+          newSequence.push({
+            note: 'REST',
+            duration: restDuration,
+            timing: (i - restDuration * 4) / stepsPerBeat,
+            velocity: 0
+          });
+        }
+      }
+    }
+
+    // If sequence is empty, add one full REST
+    if (newSequence.length === 0) {
+      newSequence.push({
+        note: 'REST',
+        duration: state.loopLength,
+        timing: 0,
+        velocity: 0
+      });
+    }
+
+    // Update state
+    setState(prev => ({
+      ...prev,
+      tracks: {
+        ...prev.tracks,
+        [trackType]: {
+          ...prev.tracks[trackType],
+          generatedSequenceWithTiming: newSequence,
+          generatedSequence: newSequence.map(n => n.note)
+        }
+      }
+    }));
+
+    setCurrentPresetName(null); // Clear preset name on manual edit
   };
 
   const startPlayback = async () => {
