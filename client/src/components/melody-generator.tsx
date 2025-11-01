@@ -927,6 +927,7 @@ export default function MelodyGeneratorComponent() {
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [currentPresetName, setCurrentPresetName] = useState<string | null>(null);
 
   // Soundfont player instances (primary audio engine)
   const bassSoundfontRef = useRef<SoundfontPlayer | null>(null);
@@ -1309,6 +1310,7 @@ export default function MelodyGeneratorComponent() {
       setStatus(`Preset "${name}" saved successfully!`);
       setShowPresetDialog(false);
       setPresetName('');
+      setCurrentPresetName(name); // Set as current preset
     } catch (error) {
       console.error('Error saving preset:', error);
       setStatus('Error saving preset');
@@ -1333,6 +1335,7 @@ export default function MelodyGeneratorComponent() {
 
       setStatus(`Preset "${name}" loaded successfully!`);
       setShowLoadDialog(false);
+      setCurrentPresetName(name); // Set as current preset
     } catch (error) {
       console.error('Error loading preset:', error);
       setStatus('Error loading preset');
@@ -1855,6 +1858,7 @@ export default function MelodyGeneratorComponent() {
 
       setStatus("All tracks generated! Ready to play.");
       setIsGenerating(false);
+      setCurrentPresetName(null); // Clear preset name on generation
     }, 50); // Small delay to show loading animation
   };
 
@@ -1901,6 +1905,7 @@ export default function MelodyGeneratorComponent() {
         } : {})
       }));
 
+      setCurrentPresetName(null); // Clear preset name on regeneration
       setStatus(`${trackType.charAt(0).toUpperCase() + trackType.slice(1)} track regenerated!`);
       setIsGenerating(false);
     }, 50);
@@ -2735,24 +2740,32 @@ export default function MelodyGeneratorComponent() {
       </div>
 
       {/* Preset Management */}
-      <div className="flex gap-4 mb-6">
-        <Button
-          variant="outline"
-          onClick={() => setShowPresetDialog(true)}
-          className="flex-1 flex items-center justify-center gap-2"
-          disabled={!state.tracks.bass.hasGenerated && !state.tracks.melody.hasGenerated && !state.tracks.harmony.hasGenerated}
-        >
-          <span>Save Preset</span>
-        </Button>
+      <div className="mb-6">
+        <div className="flex gap-4">
+          <Button
+            variant="outline"
+            onClick={() => setShowPresetDialog(true)}
+            className="flex-1 flex items-center justify-center gap-2"
+            disabled={!state.tracks.bass.hasGenerated && !state.tracks.melody.hasGenerated && !state.tracks.harmony.hasGenerated}
+          >
+            <span>Save Preset</span>
+          </Button>
 
-        <Button
-          variant="outline"
-          onClick={() => setShowLoadDialog(true)}
-          className="flex-1 flex items-center justify-center gap-2"
-          disabled={savedPresets.length === 0}
-        >
-          <span>Load Preset ({savedPresets.length})</span>
-        </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowLoadDialog(true)}
+            className="flex-1 flex items-center justify-center gap-2"
+            disabled={savedPresets.length === 0}
+          >
+            <span>Load Preset ({savedPresets.length})</span>
+          </Button>
+        </div>
+
+        {currentPresetName && (
+          <div className="mt-2 text-center text-sm text-muted-foreground">
+            Current Preset: <span className="font-semibold text-foreground">{currentPresetName}</span>
+          </div>
+        )}
       </div>
 
       {/* Save Preset Dialog */}
