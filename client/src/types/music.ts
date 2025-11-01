@@ -14,7 +14,6 @@ export interface TrackData {
   notes: NoteWithTiming[];
   hasGenerated: boolean;
   isEnabled: boolean;
-  isMuted: boolean;
   volume: number;
   synthType: string;
   currentNoteIndex: number;

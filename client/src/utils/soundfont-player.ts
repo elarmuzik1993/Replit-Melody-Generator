@@ -11,6 +11,10 @@ export interface SoundfontPlayerOptions {
   volume?: number; // 0-1
   enableReverb?: boolean;
   reverbAmount?: number; // 0-1
+  enableDelay?: boolean;
+  delayTime?: number; // seconds (e.g., 0.25 for quarter note at 120bpm)
+  delayFeedback?: number; // 0-1
+  delayMix?: number; // 0-1 (wet/dry mix)
   enableCompression?: boolean;
   filterCutoff?: number; // Hz, for low-pass filter
   maxPolyphony?: number; // Maximum simultaneous notes
@@ -43,6 +47,10 @@ export class SoundfontPlayer {
   private convolver?: ConvolverNode;
   private reverbGain?: GainNode;
   private dryGain?: GainNode;
+  private delayNode?: DelayNode;
+  private delayFeedbackGain?: GainNode;
+  private delayWetGain?: GainNode;
+  private delayDryGain?: GainNode;
   private outputNode?: AudioNode;
 
   // Performance tracking
@@ -95,6 +103,17 @@ export class SoundfontPlayer {
 
       currentNode.connect(this.filter);
       currentNode = this.filter;
+    }
+
+    // Delay (echo effect)
+    if (options.enableDelay) {
+      this.setupDelay(
+        options.delayTime ?? 0.375,
+        options.delayFeedback ?? 0.3,
+        options.delayMix ?? 0.3
+      );
+      currentNode.connect(this.delayDryGain!);
+      currentNode = this.delayDryGain!; // Continue chain from dry path
     }
 
     // Reverb (creates spatial depth)
@@ -151,6 +170,30 @@ export class SoundfontPlayer {
   }
 
   /**
+   * Set up delay effect with feedback
+   */
+  private setupDelay(delayTime: number, feedback: number, mix: number): void {
+    // Create delay nodes
+    this.delayNode = this.context.createDelay(5.0); // Max 5 seconds
+    this.delayFeedbackGain = this.context.createGain();
+    this.delayWetGain = this.context.createGain();
+    this.delayDryGain = this.context.createGain();
+
+    // Set delay parameters
+    this.delayNode.delayTime.value = delayTime;
+    this.delayFeedbackGain.gain.value = feedback;
+    this.delayWetGain.gain.value = mix;
+    this.delayDryGain.gain.value = 1 - mix;
+
+    // Connect delay feedback loop
+    this.delayNode.connect(this.delayFeedbackGain);
+    this.delayFeedbackGain.connect(this.delayNode);
+
+    // Connect wet path
+    this.delayNode.connect(this.delayWetGain);
+  }
+
+  /**
    * Load the soundfont instrument with proper detection
    */
   private async loadInstrument(): Promise<void> {
@@ -204,13 +247,30 @@ export class SoundfontPlayer {
     console.log('[SoundfontPlayer] Connecting to context.destination');
 
     try {
+      // Determine final output points
       if (this.dryGain && this.convolver) {
         // Reverb is enabled - connect both dry and wet paths
         this.dryGain.connect(finalDestination);
         this.convolver.connect(finalDestination);
         console.log('[SoundfontPlayer] ✓ Connected reverb paths to destination');
+      } else if (this.delayDryGain && this.delayWetGain) {
+        // Delay is enabled - connect both dry and wet paths
+        this.delayDryGain.connect(finalDestination);
+        this.delayWetGain!.connect(finalDestination);
+
+        // Also need to connect input to delay
+        // Find the node before delay in the chain
+        let preDelayNode: AudioNode = this.masterGain;
+        if (this.filter) {
+          preDelayNode = this.filter;
+        } else if (this.compressor) {
+          preDelayNode = this.compressor;
+        }
+        preDelayNode.connect(this.delayNode!);
+
+        console.log('[SoundfontPlayer] ✓ Connected delay paths to destination');
       } else {
-        // No reverb - find the last node in the effects chain
+        // No effects - find the last node in the effects chain
         let lastNode: AudioNode = this.masterGain;
 
         if (this.filter) {
@@ -390,6 +450,39 @@ export class SoundfontPlayer {
 
       this.dryGain.gain.setValueAtTime(1 - wetAmount, currentTime);
       this.reverbGain.gain.setValueAtTime(wetAmount, currentTime);
+    }
+  }
+
+  /**
+   * Set delay time in seconds
+   */
+  setDelayTime(time: number): void {
+    if (this.delayNode) {
+      const currentTime = this.context.currentTime;
+      this.delayNode.delayTime.setValueAtTime(Math.max(0, Math.min(5, time)), currentTime);
+    }
+  }
+
+  /**
+   * Set delay feedback (0-1)
+   */
+  setDelayFeedback(feedback: number): void {
+    if (this.delayFeedbackGain) {
+      const currentTime = this.context.currentTime;
+      this.delayFeedbackGain.gain.setValueAtTime(Math.max(0, Math.min(0.95, feedback)), currentTime);
+    }
+  }
+
+  /**
+   * Set delay mix (0-1, wet/dry balance)
+   */
+  setDelayMix(mix: number): void {
+    if (this.delayDryGain && this.delayWetGain) {
+      const wetAmount = Math.max(0, Math.min(1, mix));
+      const currentTime = this.context.currentTime;
+
+      this.delayDryGain.gain.setValueAtTime(1 - wetAmount, currentTime);
+      this.delayWetGain.gain.setValueAtTime(wetAmount, currentTime);
     }
   }
 
