@@ -3425,7 +3425,7 @@ export default function MelodyGeneratorComponent() {
                 </Button>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-4 mb-4">
+              <div className="grid md:grid-cols-4 gap-4 mb-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground flex items-center justify-between">
                     <span>Volume</span>
@@ -3451,6 +3451,21 @@ export default function MelodyGeneratorComponent() {
                     className="slider-thumb"
                     data-testid={`slider-${trackType}-volume`}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Speed</label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleTimeMultiplier(trackType)}
+                    className="w-full text-xs h-9"
+                    title="Cycle through playback speeds"
+                  >
+                    {state.tracks[trackType].timeMultiplier === 0.5 && "½x (Half)"}
+                    {state.tracks[trackType].timeMultiplier === 1.0 && "1x (Normal)"}
+                    {state.tracks[trackType].timeMultiplier === 2.0 && "2x (Double)"}
+                  </Button>
                 </div>
 
                 <div className="space-y-2">
