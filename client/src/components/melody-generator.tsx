@@ -2033,6 +2033,129 @@ export default function MelodyGeneratorComponent() {
     setCurrentPresetName(null); // Clear preset name on manual edit
   };
 
+  // Cycle note pitch up/down through scale degrees
+  const cycleNotePitch = (trackType: TrackType, stepIndex: number, direction: 'up' | 'down') => {
+    const stepsPerBeat = 4;
+    const totalSteps = state.loopLength === 4 ? 16 : 32;
+    const track = state.tracks[trackType];
+
+    // Convert to grid
+    const stepGrid: (NoteWithTiming | null)[] = new Array(totalSteps).fill(null);
+    let currentBeat = 0;
+    for (const noteData of track.generatedSequenceWithTiming) {
+      const noteStartStep = Math.floor(currentBeat * stepsPerBeat);
+      if (noteStartStep < totalSteps && noteData.note !== 'REST') {
+        stepGrid[noteStartStep] = noteData;
+      }
+      currentBeat += noteData.duration;
+    }
+
+    // Only cycle if there's a note at this step
+    if (!stepGrid[stepIndex]) return;
+
+    const scaleNotes = scales[state.scale as keyof typeof scales];
+    const baseNote = state.key;
+    const keyIndex = keys.indexOf(baseNote);
+    const [minOctave, maxOctave] = track.octaveRange;
+
+    // Get all possible notes in range
+    const possibleNotes: string[] = [];
+    for (let octave = minOctave; octave <= maxOctave; octave++) {
+      for (const semitone of scaleNotes) {
+        const noteIndex = (keyIndex + semitone) % 12;
+        possibleNotes.push(keys[noteIndex] + octave);
+      }
+    }
+
+    // Find current note index and cycle
+    const currentNote = stepGrid[stepIndex]!.note;
+    const currentIndex = possibleNotes.indexOf(currentNote);
+    let newIndex = currentIndex;
+
+    if (direction === 'up') {
+      newIndex = (currentIndex + 1) % possibleNotes.length;
+    } else {
+      newIndex = (currentIndex - 1 + possibleNotes.length) % possibleNotes.length;
+    }
+
+    stepGrid[stepIndex] = {
+      ...stepGrid[stepIndex]!,
+      note: possibleNotes[newIndex]
+    };
+
+    // Convert back to sequence
+    const newSequence: NoteWithTiming[] = [];
+    let i = 0;
+    while (i < totalSteps) {
+      if (stepGrid[i]) {
+        newSequence.push(stepGrid[i]!);
+        i++;
+      } else {
+        let restDuration = 0;
+        while (i < totalSteps && !stepGrid[i]) {
+          restDuration += 0.25;
+          i++;
+        }
+        if (restDuration > 0) {
+          newSequence.push({
+            note: 'REST',
+            duration: restDuration,
+            timing: (i - restDuration * 4) / stepsPerBeat,
+            velocity: 0
+          });
+        }
+      }
+    }
+
+    if (newSequence.length === 0) {
+      newSequence.push({
+        note: 'REST',
+        duration: state.loopLength,
+        timing: 0,
+        velocity: 0
+      });
+    }
+
+    setState(prev => ({
+      ...prev,
+      tracks: {
+        ...prev.tracks,
+        [trackType]: {
+          ...prev.tracks[trackType],
+          generatedSequenceWithTiming: newSequence,
+          generatedSequence: newSequence.map(n => n.note)
+        }
+      }
+    }));
+
+    setCurrentPresetName(null);
+  };
+
+  // Clear all notes from a track
+  const clearTrack = (trackType: TrackType) => {
+    const emptySequence: NoteWithTiming[] = [{
+      note: 'REST',
+      duration: state.loopLength,
+      timing: 0,
+      velocity: 0
+    }];
+
+    setState(prev => ({
+      ...prev,
+      tracks: {
+        ...prev.tracks,
+        [trackType]: {
+          ...prev.tracks[trackType],
+          generatedSequenceWithTiming: emptySequence,
+          generatedSequence: ['REST'],
+          hasGenerated: true
+        }
+      }
+    }));
+
+    setCurrentPresetName(null);
+  };
+
   const startPlayback = async () => {
     // Ensure soundfonts are loaded
     if (!bassSoundfontRef.current || !melodySoundfontRef.current || !harmonySoundfontRef.current) {
@@ -3060,7 +3183,7 @@ export default function MelodyGeneratorComponent() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mb-3">
-              Click any step to toggle note on/off. Right-click loop end marker to reset.
+              <strong>Click</strong> any step to add/remove notes. <strong>Hover</strong> over notes to change pitch (▲/▼). Use <strong>Clear</strong> buttons to reset tracks.
             </p>
 
             {/* Multi-Track Sequencer Grids */}
@@ -3077,27 +3200,37 @@ export default function MelodyGeneratorComponent() {
 
               return (
                 <div key={seqTrackType} className="mb-6">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className={`text-xs font-semibold ${colors.text}`}>{colors.label}</span>
-                    {seqTrackType === 'bass' && state.tracks.bass.customLoopEndStep !== null && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setState(prev => ({
-                          ...prev,
-                          tracks: {
-                            ...prev.tracks,
-                            bass: {
-                              ...prev.tracks.bass,
-                              customLoopEndStep: null
+                  <div className="mb-2 flex items-center gap-2 justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-semibold ${colors.text}`}>{colors.label}</span>
+                      {seqTrackType === 'bass' && state.tracks.bass.customLoopEndStep !== null && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setState(prev => ({
+                            ...prev,
+                            tracks: {
+                              ...prev.tracks,
+                              bass: {
+                                ...prev.tracks.bass,
+                                customLoopEndStep: null
+                              }
                             }
-                          }
-                        }))}
-                        className="text-xs h-5 px-2"
-                      >
-                        Reset Loop
-                      </Button>
-                    )}
+                          }))}
+                          className="text-xs h-5 px-2"
+                        >
+                          Reset Loop
+                        </Button>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => clearTrack(seqTrackType)}
+                      className="text-xs h-5 px-2 text-muted-foreground hover:text-foreground"
+                    >
+                      Clear
+                    </Button>
                   </div>
                   <div className="grid gap-1" style={{
                     gridTemplateColumns: `repeat(${state.loopLength === 4 ? 16 : 32}, minmax(0, 1fr))`
@@ -3145,26 +3278,67 @@ export default function MelodyGeneratorComponent() {
                       return (
                         <div
                           key={index}
-                          onClick={() => toggleStep(seqTrackType, index)}
                           className={`
-                            h-7 transition-all duration-75 cursor-pointer relative overflow-visible
-                            ${noteAtStep && noteAtStep.note !== 'REST'
-                              ? isNoteStart
-                                ? `${colors.bg} ${colors.border} border-2`
-                                : `${colors.bg}/50 ${colors.border}/30 border`
-                              : 'bg-card border border-border/30'
+                            h-12 transition-all duration-75 cursor-pointer relative overflow-visible flex flex-col items-center justify-center group
+                            ${noteAtStep && noteAtStep.note !== 'REST' && isNoteStart
+                              ? `${colors.bg} ${colors.border} border-2`
+                              : 'bg-card border border-border/30 hover:border-border'
                             }
                             ${isBarMarker ? 'border-l-2 border-l-foreground/40' : ''}
                             ${isBeatMarker && !isBarMarker ? 'border-l border-l-foreground/20' : ''}
                             ${isOutsideLoop ? 'opacity-30' : ''}
                             ${isLoopEnd ? 'border-r-4 border-r-accent' : ''}
-                            hover:opacity-80 hover:scale-105
+                            hover:opacity-80
                           `}
-                          title={`${noteAtStep ? `${noteAtStep.note} (${noteAtStep.duration} beats)` : 'Empty'} - Click to toggle`}
                         >
+                          {/* Click to add/remove note */}
+                          <div
+                            className="absolute inset-0 z-0"
+                            onClick={() => toggleStep(seqTrackType, index)}
+                            title={`${noteAtStep && isNoteStart ? `${noteAtStep.note}` : 'Empty'} - Click to toggle`}
+                          />
+
+                          {/* Note name display */}
+                          {noteAtStep && noteAtStep.note !== 'REST' && isNoteStart && (
+                            <div className="relative z-10 flex flex-col items-center pointer-events-none">
+                              <span className="text-[8px] font-bold text-white drop-shadow-md">
+                                {noteAtStep.note.replace(/(\d+)/, '')}
+                              </span>
+                              <span className="text-[6px] text-white/80">
+                                {noteAtStep.note.match(/\d+/)?.[0]}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Pitch controls - shown on hover */}
+                          {noteAtStep && noteAtStep.note !== 'REST' && isNoteStart && (
+                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity z-20 flex flex-col justify-center items-center gap-0.5 pointer-events-none">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cycleNotePitch(seqTrackType, index, 'up');
+                                }}
+                                className="w-full h-1/2 hover:bg-white/20 transition-colors text-[8px] text-white font-bold pointer-events-auto"
+                                title="Pitch up"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cycleNotePitch(seqTrackType, index, 'down');
+                                }}
+                                className="w-full h-1/2 hover:bg-white/20 transition-colors text-[8px] text-white font-bold pointer-events-auto"
+                                title="Pitch down"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          )}
+
                           {/* Roland TR-8S style LED position indicator (bass only) */}
                           {isCurrentlyPlaying && (
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-full flex justify-center pointer-events-none">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-full flex justify-center pointer-events-none z-30">
                               <div className="relative">
                                 {/* Outer glow */}
                                 <div className={`absolute inset-0 w-3 h-3 ${colors.bg} rounded-full blur-md animate-pulse`} />
