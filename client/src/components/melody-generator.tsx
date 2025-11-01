@@ -3075,7 +3075,7 @@ export default function MelodyGeneratorComponent() {
       </Card>
 
       {/* Multi-Track Step Sequencer */}
-      {state.tracks.bass.hasGenerated && (
+      {(state.tracks.bass.hasGenerated || state.tracks.melody.hasGenerated || state.tracks.harmony.hasGenerated) && (
         <Card className="shadow-lg border border-border mb-6">
           <CardContent className="p-6">
             <div className="mb-3 flex items-center justify-between">
