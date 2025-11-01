@@ -3074,6 +3074,159 @@ export default function MelodyGeneratorComponent() {
         </CardContent>
       </Card>
 
+      {/* Multi-Track Step Sequencer */}
+      {state.tracks.bass.hasGenerated && (
+        <Card className="shadow-lg border border-border mb-6">
+          <CardContent className="p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h4 className="text-sm font-semibold text-foreground">Step Sequencer (All Tracks)</h4>
+                <span className="text-xs text-muted-foreground">
+                  {state.loopLength === 4 ? '16 steps (4 bars)' : '32 steps (8 bars)'}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Click any step to toggle note on/off. Right-click loop end marker to reset.
+            </p>
+
+            {/* Multi-Track Sequencer Grids */}
+            {(['bass', 'melody', 'harmony'] as const).map((seqTrackType) => {
+              if (!state.tracks[seqTrackType].hasGenerated) return null;
+
+              const trackColors = {
+                bass: { bg: 'bg-orange-500', border: 'border-orange-500', text: 'text-orange-500', label: 'Bass' },
+                melody: { bg: 'bg-cyan-500', border: 'border-cyan-500', text: 'text-cyan-500', label: 'Melody' },
+                harmony: { bg: 'bg-purple-500', border: 'border-purple-500', text: 'text-purple-500', label: 'Harmony' }
+              };
+
+              const colors = trackColors[seqTrackType];
+
+              return (
+                <div key={seqTrackType} className="mb-6">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${colors.text}`}>{colors.label}</span>
+                    {seqTrackType === 'bass' && state.tracks.bass.customLoopEndStep !== null && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setState(prev => ({
+                          ...prev,
+                          tracks: {
+                            ...prev.tracks,
+                            bass: {
+                              ...prev.tracks.bass,
+                              customLoopEndStep: null
+                            }
+                          }
+                        }))}
+                        className="text-xs h-5 px-2"
+                      >
+                        Reset Loop
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid gap-1" style={{
+                    gridTemplateColumns: `repeat(${state.loopLength === 4 ? 16 : 32}, minmax(0, 1fr))`
+                  }}>
+                    {Array.from({ length: state.loopLength === 4 ? 16 : 32 }).map((_, index) => {
+                      // Calculate which note is playing at this step
+                      const stepsPerBeat = 4; // 16th note grid
+                      const totalSteps = state.loopLength === 4 ? 16 : 32;
+                      const sequence = state.tracks[seqTrackType].generatedSequenceWithTiming;
+
+                      // Find if a note starts at this step
+                      let currentBeat = 0;
+                      let noteAtStep: NoteWithTiming | null = null;
+                      let isNoteStart = false;
+
+                      for (let i = 0; i < sequence.length; i++) {
+                        const noteData = sequence[i];
+                        const noteStartStep = Math.floor(currentBeat * stepsPerBeat);
+                        const noteEndStep = Math.floor((currentBeat + noteData.duration) * stepsPerBeat);
+
+                        if (noteStartStep === index) {
+                          noteAtStep = noteData;
+                          isNoteStart = true;
+                          break;
+                        } else if (noteStartStep < index && index < noteEndStep) {
+                          noteAtStep = noteData;
+                          break;
+                        }
+
+                        currentBeat += noteData.duration;
+                      }
+
+                      // Check if this is the currently playing step (bass only has step indicator)
+                      const isCurrentlyPlaying = state.isPlaying && seqTrackType === 'bass' && index === state.tracks.bass.currentStepIndex;
+
+                      // Beat markers (every 4 steps)
+                      const isBeatMarker = index % 4 === 0;
+                      const isBarMarker = index % 16 === 0;
+
+                      // Loop end marker (bass only)
+                      const loopEndStep = seqTrackType === 'bass' ? (state.tracks.bass.customLoopEndStep ?? (totalSteps - 1)) : (totalSteps - 1);
+                      const isLoopEnd = seqTrackType === 'bass' && index === loopEndStep;
+                      const isOutsideLoop = seqTrackType === 'bass' && index > loopEndStep;
+
+                      return (
+                        <div
+                          key={index}
+                          onClick={() => toggleStep(seqTrackType, index)}
+                          className={`
+                            h-7 transition-all duration-75 cursor-pointer relative overflow-visible
+                            ${noteAtStep && noteAtStep.note !== 'REST'
+                              ? isNoteStart
+                                ? `${colors.bg} ${colors.border} border-2`
+                                : `${colors.bg}/50 ${colors.border}/30 border`
+                              : 'bg-card border border-border/30'
+                            }
+                            ${isBarMarker ? 'border-l-2 border-l-foreground/40' : ''}
+                            ${isBeatMarker && !isBarMarker ? 'border-l border-l-foreground/20' : ''}
+                            ${isOutsideLoop ? 'opacity-30' : ''}
+                            ${isLoopEnd ? 'border-r-4 border-r-accent' : ''}
+                            hover:opacity-80 hover:scale-105
+                          `}
+                          title={`${noteAtStep ? `${noteAtStep.note} (${noteAtStep.duration} beats)` : 'Empty'} - Click to toggle`}
+                        >
+                          {/* Roland TR-8S style LED position indicator (bass only) */}
+                          {isCurrentlyPlaying && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-full flex justify-center pointer-events-none">
+                              <div className="relative">
+                                {/* Outer glow */}
+                                <div className={`absolute inset-0 w-3 h-3 ${colors.bg} rounded-full blur-md animate-pulse`} />
+                                {/* LED dot */}
+                                <div className={`relative w-3 h-3 ${colors.bg} rounded-full border-2 border-orange-300 shadow-lg shadow-orange-500/80`} />
+                              </div>
+                            </div>
+                          )}
+                          {isLoopEnd && (
+                            <div className="absolute -top-2 -right-1 w-3 h-3 bg-accent rounded-full border-2 border-background" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Step Numbers */}
+            <div className="grid gap-1 mt-1" style={{
+              gridTemplateColumns: `repeat(${state.loopLength === 4 ? 16 : 32}, minmax(0, 1fr))`
+            }}>
+              {Array.from({ length: state.loopLength === 4 ? 16 : 32 }).map((_, index) => (
+                <div key={index} className="text-center">
+                  {index % 4 === 0 && (
+                    <span className="text-[10px] text-muted-foreground">{index / 4 + 1}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Track Sections */}
       <div className="space-y-4 mb-6">
         {(['bass', 'melody', 'harmony'] as const).map((trackType) => (
@@ -3239,157 +3392,6 @@ export default function MelodyGeneratorComponent() {
                   </Select>
                 </div>
               </div>
-
-              {/* Multi-Track Step Sequencer Visualization */}
-              {trackType === 'bass' && state.tracks.bass.hasGenerated && (
-                <div className="mt-6 pt-6 border-t border-border">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <h4 className="text-sm font-semibold text-foreground">Step Sequencer (All Tracks)</h4>
-                      <span className="text-xs text-muted-foreground">
-                        {state.loopLength === 4 ? '16 steps (4 bars)' : '32 steps (8 bars)'}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Click any step to toggle note on/off. Right-click loop end marker to reset.
-                  </p>
-
-                  {/* Multi-Track Sequencer Grids */}
-                  {(['bass', 'melody', 'harmony'] as const).map((seqTrackType) => {
-                    if (!state.tracks[seqTrackType].hasGenerated) return null;
-
-                    const trackColors = {
-                      bass: { bg: 'bg-orange-500', border: 'border-orange-500', text: 'text-orange-500', label: 'Bass' },
-                      melody: { bg: 'bg-cyan-500', border: 'border-cyan-500', text: 'text-cyan-500', label: 'Melody' },
-                      harmony: { bg: 'bg-purple-500', border: 'border-purple-500', text: 'text-purple-500', label: 'Harmony' }
-                    };
-
-                    const colors = trackColors[seqTrackType];
-
-                    return (
-                      <div key={seqTrackType} className="mb-6">
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className={`text-xs font-semibold ${colors.text}`}>{colors.label}</span>
-                          {seqTrackType === 'bass' && state.tracks.bass.customLoopEndStep !== null && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setState(prev => ({
-                                ...prev,
-                                tracks: {
-                                  ...prev.tracks,
-                                  bass: {
-                                    ...prev.tracks.bass,
-                                    customLoopEndStep: null
-                                  }
-                                }
-                              }))}
-                              className="text-xs h-5 px-2"
-                            >
-                              Reset Loop
-                            </Button>
-                          )}
-                        </div>
-                        <div className="grid gap-1" style={{
-                          gridTemplateColumns: `repeat(${state.loopLength === 4 ? 16 : 32}, minmax(0, 1fr))`
-                        }}>
-                          {Array.from({ length: state.loopLength === 4 ? 16 : 32 }).map((_, index) => {
-                            // Calculate which note is playing at this step
-                            const stepsPerBeat = 4; // 16th note grid
-                            const totalSteps = state.loopLength === 4 ? 16 : 32;
-                            const sequence = state.tracks[seqTrackType].generatedSequenceWithTiming;
-
-                            // Find if a note starts at this step
-                            let currentBeat = 0;
-                            let noteAtStep: NoteWithTiming | null = null;
-                            let isNoteStart = false;
-
-                            for (let i = 0; i < sequence.length; i++) {
-                              const noteData = sequence[i];
-                              const noteStartStep = Math.floor(currentBeat * stepsPerBeat);
-                              const noteEndStep = Math.floor((currentBeat + noteData.duration) * stepsPerBeat);
-
-                              if (noteStartStep === index) {
-                                noteAtStep = noteData;
-                                isNoteStart = true;
-                                break;
-                              } else if (noteStartStep < index && index < noteEndStep) {
-                                noteAtStep = noteData;
-                                break;
-                              }
-
-                              currentBeat += noteData.duration;
-                            }
-
-                            // Check if this is the currently playing step (bass only has step indicator)
-                            const isCurrentlyPlaying = state.isPlaying && seqTrackType === 'bass' && index === state.tracks.bass.currentStepIndex;
-
-                            // Beat markers (every 4 steps)
-                            const isBeatMarker = index % 4 === 0;
-                            const isBarMarker = index % 16 === 0;
-
-                            // Loop end marker (bass only)
-                            const loopEndStep = seqTrackType === 'bass' ? (state.tracks.bass.customLoopEndStep ?? (totalSteps - 1)) : (totalSteps - 1);
-                            const isLoopEnd = seqTrackType === 'bass' && index === loopEndStep;
-                            const isOutsideLoop = seqTrackType === 'bass' && index > loopEndStep;
-
-                            return (
-                              <div
-                                key={index}
-                                onClick={() => toggleStep(seqTrackType, index)}
-                                className={`
-                                  h-7 transition-all duration-75 cursor-pointer relative overflow-visible
-                                  ${noteAtStep && noteAtStep.note !== 'REST'
-                                    ? isNoteStart
-                                      ? `${colors.bg} ${colors.border} border-2`
-                                      : `${colors.bg}/50 ${colors.border}/30 border`
-                                    : 'bg-card border border-border/30'
-                                  }
-                                  ${isBarMarker ? 'border-l-2 border-l-foreground/40' : ''}
-                                  ${isBeatMarker && !isBarMarker ? 'border-l border-l-foreground/20' : ''}
-                                  ${isOutsideLoop ? 'opacity-30' : ''}
-                                  ${isLoopEnd ? 'border-r-4 border-r-accent' : ''}
-                                  hover:opacity-80 hover:scale-105
-                                `}
-                                title={`${noteAtStep ? `${noteAtStep.note} (${noteAtStep.duration} beats)` : 'Empty'} - Click to toggle`}
-                              >
-                                {/* Roland TR-8S style LED position indicator (bass only) */}
-                                {isCurrentlyPlaying && (
-                                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-full flex justify-center pointer-events-none">
-                                    <div className="relative">
-                                      {/* Outer glow */}
-                                      <div className={`absolute inset-0 w-3 h-3 ${colors.bg} rounded-full blur-md animate-pulse`} />
-                                      {/* LED dot */}
-                                      <div className={`relative w-3 h-3 ${colors.bg} rounded-full border-2 border-orange-300 shadow-lg shadow-orange-500/80`} />
-                                    </div>
-                                  </div>
-                                )}
-                                {isLoopEnd && (
-                                  <div className="absolute -top-2 -right-1 w-3 h-3 bg-accent rounded-full border-2 border-background" />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Step Numbers */}
-                  <div className="grid gap-1 mt-1" style={{
-                    gridTemplateColumns: `repeat(${state.loopLength === 4 ? 16 : 32}, minmax(0, 1fr))`
-                  }}>
-                    {Array.from({ length: state.loopLength === 4 ? 16 : 32 }).map((_, index) => (
-                      <div key={index} className="text-center">
-                        {index % 4 === 0 && (
-                          <span className="text-[10px] text-muted-foreground">{index / 4 + 1}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
             </CardContent>
           </Card>
