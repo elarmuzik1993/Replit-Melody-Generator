@@ -748,6 +748,76 @@ const synthPresets = {
       return synth;
     }
   },
+  fm_bass: {
+    name: "FM Bass",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 1,
+        modulationIndex: 25,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.001,
+          decay: 0.2,
+          sustain: 0.4,
+          release: 0.5
+        },
+        modulation: { type: "square" },
+        modulationEnvelope: {
+          attack: 0.01,
+          decay: 0.1,
+          sustain: 0.3,
+          release: 0.3
+        }
+      }).toDestination();
+      synth.volume.value = -8;
+      return synth;
+    }
+  },
+  wobble_bass: {
+    name: "Wobble Bass",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "fatsawtooth"
+        },
+        filter: {
+          Q: 10,
+          type: "lowpass",
+          rolloff: -24,
+          frequency: 500
+        },
+        envelope: {
+          attack: 0.001,
+          decay: 0.1,
+          sustain: 0.8,
+          release: 0.3
+        },
+        filterEnvelope: {
+          attack: 0.001,
+          decay: 0.05,
+          sustain: 0.4,
+          release: 0.2,
+          baseFrequency: 100,
+          octaves: 6,
+          exponent: 2
+        }
+      }).toDestination();
+      synth.volume.value = -7;
+      return synth;
+    }
+  },
+  picked_bass: {
+    name: "Picked Bass",
+    config: () => {
+      const synth = new window.Tone.PluckSynth({
+        attackNoise: 0.8,
+        dampening: 1500,
+        resonance: 0.95
+      }).toDestination();
+      synth.volume.value = -5;
+      return synth;
+    }
+  },
   // Harmony/Pad synths
   pad_synth: {
     name: "Warm Pad",
@@ -766,6 +836,162 @@ const synthPresets = {
       modulation: { type: "sine" },
       modulationEnvelope: { attack: 0.5, decay: 0.3, sustain: 0.4, release: 1.0 }
     }).toDestination()
+  },
+  choir_pad: {
+    name: "Choir Pad",
+    config: () => {
+      const synth = new window.Tone.Synth({
+        oscillator: { type: "triangle" },
+        envelope: {
+          attack: 1.5,
+          decay: 1.0,
+          sustain: 0.8,
+          release: 3.5
+        }
+      }).toDestination();
+      synth.volume.value = -10;
+      return synth;
+    }
+  },
+  glass_pad: {
+    name: "Glass Pad",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 3,
+        modulationIndex: 12,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.8,
+          decay: 1.2,
+          sustain: 0.7,
+          release: 4.0
+        },
+        modulation: { type: "sine" },
+        modulationEnvelope: {
+          attack: 0.4,
+          decay: 0.5,
+          sustain: 0.6,
+          release: 2.0
+        }
+      }).toDestination();
+      synth.volume.value = -11;
+      return synth;
+    }
+  },
+  soft_strings: {
+    name: "Soft Strings",
+    config: () => {
+      const synth = new window.Tone.Synth({
+        oscillator: { type: "sawtooth" },
+        envelope: {
+          attack: 1.0,
+          decay: 0.6,
+          sustain: 0.75,
+          release: 2.5
+        }
+      }).toDestination();
+      synth.volume.value = -12;
+      return synth;
+    }
+  },
+  // Additional melody instruments
+  organ: {
+    name: "Organ",
+    config: () => {
+      const synth = new window.Tone.Synth({
+        oscillator: { type: "square" },
+        envelope: {
+          attack: 0.01,
+          decay: 0.1,
+          sustain: 0.9,
+          release: 0.5
+        }
+      }).toDestination();
+      synth.volume.value = -9;
+      return synth;
+    }
+  },
+  vibraphone: {
+    name: "Vibraphone",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 6,
+        modulationIndex: 3,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.002,
+          decay: 2.5,
+          sustain: 0.2,
+          release: 3.0
+        },
+        modulation: { type: "sine" },
+        modulationEnvelope: {
+          attack: 0.001,
+          decay: 2.0,
+          sustain: 0.1,
+          release: 2.5
+        }
+      }).toDestination();
+      synth.volume.value = -12;
+      return synth;
+    }
+  },
+  arp_synth: {
+    name: "Arpeggiator",
+    config: () => {
+      const synth = new window.Tone.MonoSynth({
+        oscillator: {
+          type: "triangle"
+        },
+        filter: {
+          Q: 5,
+          type: "lowpass",
+          rolloff: -12,
+          frequency: 4000
+        },
+        envelope: {
+          attack: 0.002,
+          decay: 0.1,
+          sustain: 0.2,
+          release: 0.3
+        },
+        filterEnvelope: {
+          attack: 0.001,
+          decay: 0.08,
+          sustain: 0.1,
+          release: 0.2,
+          baseFrequency: 1000,
+          octaves: 3
+        }
+      }).toDestination();
+      synth.volume.value = -8;
+      return synth;
+    }
+  },
+  vocal_synth: {
+    name: "Vocal Synth",
+    config: () => {
+      const synth = new window.Tone.FMSynth({
+        harmonicity: 1.5,
+        modulationIndex: 10,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.05,
+          decay: 0.5,
+          sustain: 0.6,
+          release: 1.0
+        },
+        modulation: { type: "triangle" },
+        modulationEnvelope: {
+          attack: 0.03,
+          decay: 0.3,
+          sustain: 0.5,
+          release: 0.8
+        }
+      }).toDestination();
+      synth.volume.value = -10;
+      return synth;
+    }
   }
 };
 
@@ -775,20 +1001,20 @@ const getPresetsForTrack = (trackType: 'bass' | 'melody' | 'harmony') => {
     case 'bass':
       return Object.fromEntries(
         Object.entries(synthPresets).filter(([key]) =>
-          ['bass_synth', 'sub_bass', 'reese_bass', 'fat_bass', 'acid_bass'].includes(key)
+          ['bass_synth', 'sub_bass', 'reese_bass', 'fat_bass', 'acid_bass', 'fm_bass', 'wobble_bass', 'picked_bass'].includes(key)
         )
       );
     case 'harmony':
       return Object.fromEntries(
-        Object.entries(synthPresets).filter(([key]) => 
-          ['pad_synth', 'string_pad'].includes(key)
+        Object.entries(synthPresets).filter(([key]) =>
+          ['pad_synth', 'string_pad', 'choir_pad', 'glass_pad', 'soft_strings'].includes(key)
         )
       );
     case 'melody':
     default:
       return Object.fromEntries(
         Object.entries(synthPresets).filter(([key]) =>
-          ['electric_piano', 'pluck', 'marimba', 'bell', 'lead_synth', 'square_lead', 'ambient_keys', 'bright_keys'].includes(key)
+          ['electric_piano', 'pluck', 'marimba', 'bell', 'lead_synth', 'square_lead', 'ambient_keys', 'bright_keys', 'organ', 'vibraphone', 'arp_synth', 'vocal_synth'].includes(key)
         )
       );
   }
