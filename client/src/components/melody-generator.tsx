@@ -9,15 +9,7 @@ import MidiWriter from "midi-writer-js";
 import { SoundfontPlayer } from "@/utils/soundfont-player";
 import { soundfontPresets, getSoundfontName } from "@/utils/soundfont-config";
 import { LoadingSpinner, InlineLoading, LoadingDots } from "@/components/ui/loading-spinner";
-// Refactored modules
-import { scales, keys, scaleWeights, intervalQuality } from "@/config/scales";
-import { rhythmPatterns, timeSignatures } from "@/config/rhythms";
-import { chordProgressions, getChordTones } from "@/config/chords";
-import { genreStyles, type GenreStyle } from "@/config/genres";
-import { NoteWithTiming, TrackData, MultiTrackState, type TrackType } from "@/types/music";
-import { weightedRandomSelect, calculateInterval, applyStepwiseBias } from "@/utils/music/noteUtils";
-import { getComplementaryInterval } from "@/utils/music/harmonyUtils";
-import { exportToMidi } from "@/utils/midi/midiExporter";
+import magentaService from "@/utils/ai/magentaService";
 
 // Import Tone.js
 declare global {
@@ -1148,6 +1140,10 @@ export default function MelodyGeneratorComponent() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingSoundfonts, setIsLoadingSoundfonts] = useState(false);
 
+  // AI state
+  const [aiEnabled, setAiEnabled] = useState(true); // AI enabled by default for all tracks
+  const [aiTemperature, setAiTemperature] = useState(1.0); // Creativity level (0.5-1.5)
+
   // Preset management state
   const [savedPresets, setSavedPresets] = useState<Array<{name: string, timestamp: number}>>([]);
   const [showPresetDialog, setShowPresetDialog] = useState(false);
@@ -2035,57 +2031,143 @@ export default function MelodyGeneratorComponent() {
     return sequenceWithTiming;
   };
 
-  const generateAllTracks = () => {
+  const generateAllTracks = async () => {
     setIsGenerating(true);
-    setStatus("Generating all tracks...");
 
-    // Small delay to show loading state
-    setTimeout(() => {
-      // Generate rhythm-aware tracks
-      const bassTrackWithTiming = generateTrackWithTiming('bass');
-      const melodyTrackWithTiming = generateMelodyWithStructure(); // Use enhanced melody generator
-      const harmonyTrackWithTiming = generateTrackWithTiming('harmony', melodyTrackWithTiming);
+    try {
+      if (aiEnabled) {
+        // AI-powered generation
+        setStatus("Initializing AI models...");
+        await magentaService.initialize();
 
-    // Also create simple note arrays for backward compatibility
-    const bassTrack = bassTrackWithTiming.map(n => n.note);
-    const melodyTrack = melodyTrackWithTiming.map(n => n.note);
-    const harmonyTrack = harmonyTrackWithTiming.map(n => n.note);
+        setStatus("AI generating all tracks...");
 
-    setState(prev => ({
-      ...prev,
-      tracks: {
-        bass: {
-          ...prev.tracks.bass,
-          generatedSequence: bassTrack,
-          generatedSequenceWithTiming: bassTrackWithTiming,
-          hasGenerated: true,
-          currentNoteIndex: -1
-        },
-        melody: {
-          ...prev.tracks.melody,
-          generatedSequence: melodyTrack,
-          generatedSequenceWithTiming: melodyTrackWithTiming,
-          hasGenerated: true,
-          currentNoteIndex: -1
-        },
-        harmony: {
-          ...prev.tracks.harmony,
-          generatedSequence: harmonyTrack,
-          generatedSequenceWithTiming: harmonyTrackWithTiming,
-          hasGenerated: true,
-          currentNoteIndex: -1
-        }
-      },
-      // Mirror melody track to legacy fields for backward compatibility
-      generatedMelody: melodyTrack,
-      currentNoteIndex: -1,
-      hasGeneratedMelody: true
-    }));
+        const scaleArray = scales[state.scale as keyof typeof scales] || scales.major;
 
-      setStatus("All tracks generated! Ready to play.");
+        // Generate all tracks with AI
+        const [melodyTrackWithTiming, bassTrackWithTiming, harmonyTrackWithTiming] = await Promise.all([
+          magentaService.generateMelody({
+            temperature: aiTemperature,
+            key: state.key,
+            scale: scaleArray,
+            octaveRange: state.tracks.melody.octaveRange as [number, number],
+            numSteps: 32
+          }),
+          magentaService.generateBass({
+            temperature: aiTemperature * 0.8,
+            key: state.key,
+            scale: scaleArray,
+            octaveRange: state.tracks.bass.octaveRange as [number, number],
+            numSteps: 32
+          }),
+          magentaService.generateMelody({
+            temperature: aiTemperature * 0.9,
+            key: state.key,
+            scale: scaleArray,
+            octaveRange: state.tracks.harmony.octaveRange as [number, number],
+            numSteps: 32
+          }).then(notes =>
+            // Generate harmony from melody notes
+            magentaService.generateHarmony(notes, {
+              temperature: aiTemperature * 0.9,
+              key: state.key,
+              scale: scaleArray,
+              octaveRange: state.tracks.harmony.octaveRange as [number, number]
+            })
+          )
+        ]);
+
+        // Create simple note arrays for backward compatibility
+        const bassTrack = bassTrackWithTiming.map(n => n.note);
+        const melodyTrack = melodyTrackWithTiming.map(n => n.note);
+        const harmonyTrack = harmonyTrackWithTiming.map(n => n.note);
+
+        setState(prev => ({
+          ...prev,
+          tracks: {
+            bass: {
+              ...prev.tracks.bass,
+              generatedSequence: bassTrack,
+              generatedSequenceWithTiming: bassTrackWithTiming,
+              hasGenerated: true,
+              currentNoteIndex: -1
+            },
+            melody: {
+              ...prev.tracks.melody,
+              generatedSequence: melodyTrack,
+              generatedSequenceWithTiming: melodyTrackWithTiming,
+              hasGenerated: true,
+              currentNoteIndex: -1
+            },
+            harmony: {
+              ...prev.tracks.harmony,
+              generatedSequence: harmonyTrack,
+              generatedSequenceWithTiming: harmonyTrackWithTiming,
+              hasGenerated: true,
+              currentNoteIndex: -1
+            }
+          },
+          generatedMelody: melodyTrack,
+          currentNoteIndex: -1,
+          hasGeneratedMelody: true
+        }));
+
+        setStatus("AI tracks generated! Ready to play.");
+      } else {
+        // Original algorithmic generation
+        setStatus("Generating all tracks...");
+
+        // Small delay to show loading state
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        const bassTrackWithTiming = generateTrackWithTiming('bass');
+        const melodyTrackWithTiming = generateMelodyWithStructure();
+        const harmonyTrackWithTiming = generateTrackWithTiming('harmony', melodyTrackWithTiming);
+
+        const bassTrack = bassTrackWithTiming.map(n => n.note);
+        const melodyTrack = melodyTrackWithTiming.map(n => n.note);
+        const harmonyTrack = harmonyTrackWithTiming.map(n => n.note);
+
+        setState(prev => ({
+          ...prev,
+          tracks: {
+            bass: {
+              ...prev.tracks.bass,
+              generatedSequence: bassTrack,
+              generatedSequenceWithTiming: bassTrackWithTiming,
+              hasGenerated: true,
+              currentNoteIndex: -1
+            },
+            melody: {
+              ...prev.tracks.melody,
+              generatedSequence: melodyTrack,
+              generatedSequenceWithTiming: melodyTrackWithTiming,
+              hasGenerated: true,
+              currentNoteIndex: -1
+            },
+            harmony: {
+              ...prev.tracks.harmony,
+              generatedSequence: harmonyTrack,
+              generatedSequenceWithTiming: harmonyTrackWithTiming,
+              hasGenerated: true,
+              currentNoteIndex: -1
+            }
+          },
+          generatedMelody: melodyTrack,
+          currentNoteIndex: -1,
+          hasGeneratedMelody: true
+        }));
+
+        setStatus("All tracks generated! Ready to play.");
+      }
+
+      setCurrentPresetName(null);
+    } catch (error) {
+      console.error('[AI] Generation error:', error);
+      setStatus(`Error: ${error instanceof Error ? error.message : 'AI generation failed'}`);
+    } finally {
       setIsGenerating(false);
-      setCurrentPresetName(null); // Clear preset name on generation
-    }, 50); // Small delay to show loading animation
+    }
   };
 
   // Regenerate a single track without affecting others
@@ -3331,8 +3413,57 @@ export default function MelodyGeneratorComponent() {
             </div>
           </div>
 
+          {/* AI Settings */}
+          <div className="grid md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-border">
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  AI Generation
+                  <Info className="w-4 h-4 text-muted-foreground" />
+                </span>
+                <button
+                  onClick={() => setAiEnabled(!aiEnabled)}
+                  className={`px-4 py-1.5 rounded-md font-medium text-sm transition-colors ${
+                    aiEnabled
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {aiEnabled ? '🤖 AI Enabled' : '🎵 Algorithmic'}
+                </button>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {aiEnabled
+                  ? 'Using Google Magenta AI for creative, unique melodies'
+                  : 'Using algorithmic generation with music theory rules'}
+              </p>
+            </div>
+
+            {aiEnabled && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                  <span>AI Creativity</span>
+                  <span className="text-primary font-semibold">
+                    {aiTemperature.toFixed(1)}
+                  </span>
+                </label>
+                <Slider
+                  value={[aiTemperature]}
+                  onValueChange={(value) => setAiTemperature(value[0])}
+                  min={0.5}
+                  max={1.5}
+                  step={0.1}
+                  className="slider-thumb"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Lower = more predictable, Higher = more experimental
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Notes per Track */}
-          <div className="space-y-3">
+          <div className="space-y-3 mt-6">
             <label className="text-sm font-medium text-foreground flex items-center justify-between">
               <span>Notes per Track</span>
               <span className="text-primary font-semibold" data-testid="text-note-count">
