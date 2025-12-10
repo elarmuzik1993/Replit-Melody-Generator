@@ -4,6 +4,15 @@
  */
 
 import * as mm from '@magenta/music';
+import {
+  getChordProgression,
+  getChordTones,
+  getChordRoot,
+  getNoteChordIndex,
+  quantizeToChordTone,
+  quantizeBassToChord,
+  createHarmonyNote
+} from '@/utils/music/chordProgressionUtils';
 
 interface NoteWithTiming {
   note: string;
@@ -19,6 +28,7 @@ interface MagentaGenerationOptions {
   key?: string;
   scale?: number[];
   octaveRange?: [number, number];
+  scaleName?: string;  // For chord progression selection
 }
 
 class MagentaService {
@@ -80,8 +90,28 @@ class MagentaService {
 
     const [minOctave, maxOctave] = octaveRange;
 
+    // Get quantization info to convert steps to beats
+    const stepsPerQuarter = noteSequence.quantizationInfo?.stepsPerQuarter || 4;
+    const beatsPerStep = 1.0 / stepsPerQuarter;
+
     for (const note of noteSequence.notes) {
-      if (note.pitch === undefined || note.startTime === undefined || note.endTime === undefined) {
+      if (note.pitch === undefined) {
+        continue;
+      }
+
+      // Use quantized steps if available (MusicVAE output), otherwise fall back to time values
+      let startTime: number;
+      let duration: number;
+
+      if (note.quantizedStartStep !== undefined && note.quantizedEndStep !== undefined) {
+        // Convert steps to beats
+        startTime = note.quantizedStartStep * beatsPerStep;
+        duration = (note.quantizedEndStep - note.quantizedStartStep) * beatsPerStep;
+      } else if (note.startTime !== undefined && note.endTime !== undefined) {
+        // Fall back to time-based values
+        startTime = note.startTime;
+        duration = note.endTime - note.startTime;
+      } else {
         continue;
       }
 
@@ -94,13 +124,12 @@ class MagentaService {
       octave = Math.max(minOctave, Math.min(maxOctave, octave));
 
       const fullNote = `${noteName}${octave}`;
-      const duration = note.endTime - note.startTime;
       const velocity = note.velocity || 80;
 
       notes.push({
         note: fullNote,
-        duration: duration * 4, // Convert to beats (assuming 4/4 time)
-        timing: note.startTime * 4,
+        duration: duration,
+        timing: startTime,
         velocity: velocity
       });
     }
@@ -109,7 +138,119 @@ class MagentaService {
   }
 
   /**
-   * Generate a fresh melody using MusicVAE
+   * Apply chord progression to generated notes
+   * Quantizes notes to fit the harmonic context
+   */
+  private applyChordProgression(
+    notes: NoteWithTiming[],
+    key: string,
+    scale: number[],
+    scaleName: string,
+    octaveRange: [number, number],
+    quantizeStrength: number = 0.7
+  ): NoteWithTiming[] {
+    if (notes.length === 0) return notes;
+
+    // Get chord progression
+    const progression = getChordProgression(scaleName);
+    console.log('[Magenta] Applying chord progression:', progression);
+
+    return notes.map((noteObj, index) => {
+      // Determine which chord this note belongs to
+      const chordIndex = getNoteChordIndex(index, notes.length, progression);
+      const currentChord = progression[chordIndex];
+
+      // Get chord tones for this chord
+      const chordTones = getChordTones(currentChord, scale, key);
+
+      // Quantize the note to the nearest chord tone
+      const quantizedNote = quantizeToChordTone(
+        noteObj.note,
+        chordTones,
+        octaveRange,
+        quantizeStrength
+      );
+
+      return {
+        ...noteObj,
+        note: quantizedNote
+      };
+    });
+  }
+
+  /**
+   * Extend a short sequence to desired length by repeating with variation
+   */
+  private extendSequence(notes: NoteWithTiming[], targetBeats: number = 16): NoteWithTiming[] {
+    if (notes.length === 0) return notes;
+
+    // Calculate the duration of the original pattern
+    const lastNote = notes[notes.length - 1];
+    const sequenceDuration = lastNote.timing + lastNote.duration;
+
+    console.log('[Magenta] extendSequence input:', {
+      noteCount: notes.length,
+      firstNoteTiming: notes[0].timing,
+      lastNoteTiming: lastNote.timing,
+      lastNoteDuration: lastNote.duration,
+      sequenceDuration,
+      targetBeats
+    });
+
+    // Guard against zero or very small durations
+    if (sequenceDuration <= 0.1) {
+      console.warn('[Magenta] Sequence duration too small, using minimum 2 beats');
+      // Use a minimum duration of 2 beats for pattern repetition
+      const minDuration = 2.0;
+      const extended: NoteWithTiming[] = [];
+      let currentBeat = 0;
+      const maxRepetitions = Math.ceil(targetBeats / minDuration) + 1;
+      let repetitions = 0;
+
+      while (currentBeat < targetBeats && repetitions < maxRepetitions) {
+        for (const note of notes) {
+          extended.push({
+            ...note,
+            timing: note.timing + currentBeat
+          });
+        }
+        currentBeat += minDuration;
+        repetitions++;
+      }
+
+      return extended.filter(note => note.timing < targetBeats);
+    }
+
+    const extended: NoteWithTiming[] = [];
+    let currentBeat = 0;
+    let repetitions = 0;
+    const maxRepetitions = Math.ceil(targetBeats / sequenceDuration) + 1;
+
+    // Repeat the pattern until we reach target length
+    while (currentBeat < targetBeats && repetitions < maxRepetitions) {
+      for (const note of notes) {
+        const newNote = {
+          ...note,
+          timing: note.timing + currentBeat
+        };
+        extended.push(newNote);
+      }
+      currentBeat += sequenceDuration;
+      repetitions++;
+    }
+
+    console.log('[Magenta] extendSequence output:', {
+      originalNotes: notes.length,
+      extendedNotes: extended.length,
+      repetitions
+    });
+
+    // Trim any notes that exceed target length
+    return extended.filter(note => note.timing < targetBeats);
+  }
+
+  /**
+   * Generate a fresh melody using MusicVAE with chord progression awareness
    */
   async generateMelody(options: MagentaGenerationOptions): Promise<NoteWithTiming[]> {
     await this.initialize();
@@ -129,13 +270,29 @@ class MagentaService {
         throw new Error('No samples generated');
       }
 
-      const melody = this.convertToNoteWithTiming(
+      let melody = this.convertToNoteWithTiming(
         samples[0],
         options.key || 'C',
         options.octaveRange || [4, 6]
       );
 
-      console.log('[Magenta] Generated melody with', melody.length, 'notes');
+      // Extend the sequence to desired length (MusicVAE generates short 2-bar patterns)
+      const targetBeats = (numSteps / 4); // Convert steps to beats
+      melody = this.extendSequence(melody, targetBeats);
+
+      // Apply chord progression if scale info is provided
+      if (options.scale && options.scaleName) {
+        melody = this.applyChordProgression(
+          melody,
+          options.key || 'C',
+          options.scale,
+          options.scaleName,
+          options.octaveRange || [4, 6],
+          0.6 // Lighter quantization for melody (allows passing tones)
+        );
+      }
+
+      console.log('[Magenta] Generated chord-aware melody with', melody.length, 'notes');
       return melody;
     } catch (error) {
       console.error('[Magenta] Melody generation error:', error);
@@ -144,7 +301,7 @@ class MagentaService {
   }
 
   /**
-   * Generate bass line (lower octave, more rhythmic)
+   * Generate bass line (lower octave, more rhythmic) following chord roots
    */
   async generateBass(options: MagentaGenerationOptions): Promise<NoteWithTiming[]> {
     await this.initialize();
@@ -154,6 +311,7 @@ class MagentaService {
     }
 
     const temperature = options.temperature || 0.8; // Slightly less random for bass
+    const numSteps = options.numSteps || 32;
 
     try {
       const samples = await this.musicVAE.sample(1, temperature);
@@ -163,11 +321,41 @@ class MagentaService {
       }
 
       // Convert to bass range (lower octaves)
-      const bassNotes = this.convertToNoteWithTiming(
+      let bassNotes = this.convertToNoteWithTiming(
         samples[0],
         options.key || 'C',
         options.octaveRange || [2, 3]
       );
+
+      // Extend the sequence to desired length
+      const targetBeats = (numSteps / 4);
+      bassNotes = this.extendSequence(bassNotes, targetBeats);
+
+      // Apply chord progression - bass should follow chord roots
+      if (options.scale && options.scaleName) {
+        const progression = getChordProgression(options.scaleName);
+
+        bassNotes = bassNotes.map((noteObj, index) => {
+          const chordIndex = getNoteChordIndex(index, bassNotes.length, progression);
+          const currentChord = progression[chordIndex];
+          const chordTones = getChordTones(currentChord, options.scale!, options.key || 'C');
+          const chordRoot = getChordRoot(currentChord, options.scale!, options.key || 'C');
+
+          // Quantize bass to chord root (with occasional fifth)
+          const quantizedNote = quantizeBassToChord(
+            noteObj.note,
+            chordRoot,
+            chordTones,
+            options.octaveRange || [2, 3],
+            true // Allow fifths for variation
+          );
+
+          return {
+            ...noteObj,
+            note: quantizedNote
+          };
+        });
+      }
 
       // Make bass notes longer and more steady
       const processedBass = bassNotes.map(note => ({
@@ -176,7 +364,7 @@ class MagentaService {
         velocity: Math.min(note.velocity + 10, 127) // Slightly louder
       }));
 
-      console.log('[Magenta] Generated bass with', processedBass.length, 'notes');
+      console.log('[Magenta] Generated chord-aware bass with', processedBass.length, 'notes');
       return processedBass;
     } catch (error) {
       console.error('[Magenta] Bass generation error:', error);
@@ -185,7 +373,7 @@ class MagentaService {
   }
 
   /**
-   * Generate harmony (complementary to melody, middle register)
+   * Generate harmony (complementary to melody, middle register) using chord tones
    */
   async generateHarmony(
     melodyNotes: NoteWithTiming[],
@@ -198,6 +386,7 @@ class MagentaService {
     }
 
     const temperature = options.temperature || 0.9;
+    const numSteps = options.numSteps || 32;
 
     try {
       const samples = await this.musicVAE.sample(1, temperature);
@@ -207,11 +396,27 @@ class MagentaService {
       }
 
       // Convert to harmony range (middle octaves, between melody and bass)
-      const harmonyNotes = this.convertToNoteWithTiming(
+      let harmonyNotes = this.convertToNoteWithTiming(
         samples[0],
         options.key || 'C',
         options.octaveRange || [3, 5]
       );
+
+      // Extend the sequence to desired length
+      const targetBeats = (numSteps / 4);
+      harmonyNotes = this.extendSequence(harmonyNotes, targetBeats);
+
+      // Apply chord progression - harmony should use chord tones
+      if (options.scale && options.scaleName) {
+        harmonyNotes = this.applyChordProgression(
+          harmonyNotes,
+          options.key || 'C',
+          options.scale,
+          options.scaleName,
+          options.octaveRange || [3, 5],
+          0.9 // Strong quantization for harmony (mostly chord tones)
+        );
+      }
 
       // Make harmony notes more sustained
       const processedHarmony = harmonyNotes.map(note => ({
@@ -220,7 +425,7 @@ class MagentaService {
         velocity: Math.max(note.velocity - 15, 40) // Softer than melody
       }));
 
-      console.log('[Magenta] Generated harmony with', processedHarmony.length, 'notes');
+      console.log('[Magenta] Generated chord-aware harmony with', processedHarmony.length, 'notes');
       return processedHarmony;
     } catch (error) {
       console.error('[Magenta] Harmony generation error:', error);

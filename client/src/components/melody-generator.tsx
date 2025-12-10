@@ -10,6 +10,13 @@ import { SoundfontPlayer } from "@/utils/soundfont-player";
 import { soundfontPresets, getSoundfontName } from "@/utils/soundfont-config";
 import { LoadingSpinner, InlineLoading, LoadingDots } from "@/components/ui/loading-spinner";
 import magentaService from "@/utils/ai/magentaService";
+import {
+  getChordProgression,
+  getChordTones,
+  getChordRoot,
+  getNoteChordIndex
+} from "@/utils/music/chordProgressionUtils";
+import { scales, keys } from "@/config/scales";
 
 // Import Tone.js
 declare global {
@@ -70,16 +77,7 @@ interface MultiTrackState {
   hasGeneratedMelody: boolean;
 }
 
-const scales = {
-  major: [0, 2, 4, 5, 7, 9, 11],
-  minor: [0, 2, 3, 5, 7, 8, 10],
-  pentatonic: [0, 2, 4, 7, 9],
-  blues: [0, 3, 5, 6, 7, 10],
-  dorian: [0, 2, 3, 5, 7, 9, 10],
-  mixolydian: [0, 2, 4, 5, 7, 9, 10]
-};
-
-const keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+// Note: scales and keys are now imported from @/config/scales
 
 const timeSignatures = {
   "4/4": { name: "4/4", pattern: ["C6", "C5", "C5", "C5"], noteValue: "4n" },
@@ -293,19 +291,7 @@ const chordProgressions = {
   ]
 };
 
-const getChordTones = (chordDegree: number, scale: number[], key: string): string[] => {
-  const keyIndex = keys.indexOf(key);
-  const chordTones = [];
-  
-  // Build triad: root, third, fifth
-  for (let interval of [0, 2, 4]) {
-    const scaleIndex = (chordDegree + interval) % scale.length;
-    const noteIndex = (keyIndex + scale[scaleIndex]) % 12;
-    chordTones.push(keys[noteIndex]);
-  }
-  
-  return chordTones;
-};
+// Note: getChordTones is now imported from @/utils/music/chordProgressionUtils
 
 const getComplementaryInterval = (melodyNote: string, chordTones: string[], octaveRange: [number, number], key: string, scale: string): string => {
   const noteToPc = (n: string) => ({C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11})[n] ?? 0;
@@ -1779,33 +1765,49 @@ export default function MelodyGeneratorComponent() {
       if (actualDuration <= 0) break;
 
       // Generate note
-      let currentWeights = baseWeights;
+      let newNote: string;
 
-      // Apply melodic logic for melody track
-      if (sequenceWithTiming.length > 0 && trackType === 'melody') {
-        const lastNote = sequenceWithTiming[sequenceWithTiming.length - 1].note;
-        currentWeights = applyStepwiseBias(
-          baseWeights,
-          lastNote,
-          scaleNotes,
-          keyIndex,
-          minOctave
+      if (trackType === 'bass') {
+        // Bass follows chord roots with occasional fifths
+        const progression = getChordProgression(state.scale);
+        const chordIndex = getNoteChordIndex(sequenceWithTiming.length, Math.ceil(totalBeats / duration), progression);
+        const currentChord = progression[chordIndex];
+        const chordTones = getChordTones(currentChord, scaleNotes, baseNote);
+        const chordRoot = getChordRoot(currentChord, scaleNotes, baseNote);
+
+        // 80% root, 20% fifth
+        const useFifth = Math.random() < 0.2;
+        const bassNoteName = useFifth ? chordTones[2] : chordRoot; // Fifth is index 2
+
+        newNote = bassNoteName + minOctave;
+      } else {
+        // Melody and harmony use existing logic
+        let currentWeights = baseWeights;
+
+        // Apply melodic logic for melody track
+        if (sequenceWithTiming.length > 0 && trackType === 'melody') {
+          const lastNote = sequenceWithTiming[sequenceWithTiming.length - 1].note;
+          currentWeights = applyStepwiseBias(
+            baseWeights,
+            lastNote,
+            scaleNotes,
+            keyIndex,
+            minOctave
+          );
+        }
+
+        const selectedScaleIndex = weightedRandomSelect(
+          scaleNotes.map((_, index) => index),
+          currentWeights
         );
+        const semitone = scaleNotes[selectedScaleIndex];
+        const noteIndex = (keyIndex + semitone) % 12;
+
+        // Choose octave
+        const octave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+
+        newNote = keys[noteIndex] + octave;
       }
-
-      const selectedScaleIndex = weightedRandomSelect(
-        scaleNotes.map((_, index) => index),
-        currentWeights
-      );
-      const semitone = scaleNotes[selectedScaleIndex];
-      const noteIndex = (keyIndex + semitone) % 12;
-
-      // Choose octave
-      const octave = trackType === 'bass'
-        ? minOctave
-        : Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
-
-      const newNote = keys[noteIndex] + octave;
 
       // Velocity variation for humanization
       let velocity = 80;
@@ -2044,12 +2046,13 @@ export default function MelodyGeneratorComponent() {
 
         const scaleArray = scales[state.scale as keyof typeof scales] || scales.major;
 
-        // Generate all tracks with AI
+        // Generate all tracks with AI (chord-aware)
         const [melodyTrackWithTiming, bassTrackWithTiming, harmonyTrackWithTiming] = await Promise.all([
           magentaService.generateMelody({
             temperature: aiTemperature,
             key: state.key,
             scale: scaleArray,
+            scaleName: state.scale,  // For chord progression selection
             octaveRange: state.tracks.melody.octaveRange as [number, number],
             numSteps: 32
           }),
@@ -2057,6 +2060,7 @@ export default function MelodyGeneratorComponent() {
             temperature: aiTemperature * 0.8,
             key: state.key,
             scale: scaleArray,
+            scaleName: state.scale,  // For chord progression selection
             octaveRange: state.tracks.bass.octaveRange as [number, number],
             numSteps: 32
           }),
@@ -2064,6 +2068,7 @@ export default function MelodyGeneratorComponent() {
             temperature: aiTemperature * 0.9,
             key: state.key,
             scale: scaleArray,
+            scaleName: state.scale,  // For chord progression selection
             octaveRange: state.tracks.harmony.octaveRange as [number, number],
             numSteps: 32
           }).then(notes =>
@@ -2072,6 +2077,7 @@ export default function MelodyGeneratorComponent() {
               temperature: aiTemperature * 0.9,
               key: state.key,
               scale: scaleArray,
+              scaleName: state.scale,  // For chord progression selection
               octaveRange: state.tracks.harmony.octaveRange as [number, number]
             })
           )
