@@ -17,6 +17,7 @@ import {
   getNoteChordIndex
 } from "@/utils/music/chordProgressionUtils";
 import { scales, keys } from "@/config/scales";
+import type { TrackType } from "@/types/music";
 
 // Import Tone.js
 declare global {
@@ -29,6 +30,7 @@ interface NoteWithTiming {
   note: string;
   duration: number;  // in beats (0.25 = 16th, 0.5 = 8th, 1.0 = quarter, etc.)
   velocity: number;  // 0-127 MIDI velocity
+  timing?: number;   // start position in beats (set by step sequencer edits)
 }
 
 interface TrackData {
@@ -1286,7 +1288,7 @@ export default function MelodyGeneratorComponent() {
     }
 
     try {
-      const tracks: MidiWriter.Track[] = [];
+      const tracks: InstanceType<typeof MidiWriter.Track>[] = [];
       
       // Create Bass track (if generated and enabled)
       if (state.tracks.bass.hasGenerated && state.tracks.bass.isEnabled && state.tracks.bass.generatedSequence.length > 0) {
@@ -2527,7 +2529,7 @@ export default function MelodyGeneratorComponent() {
       const stepArray = Array.from({ length: effectiveSteps }, (_, i) => i);
 
       stepSequencerRef.current = new window.Tone.Sequence(
-        (time, step) => {
+        (time: number, step: number) => {
           // Update the current step index in state
           window.Tone.Draw.schedule(() => {
             setState(prev => ({

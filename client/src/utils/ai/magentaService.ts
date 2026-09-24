@@ -95,7 +95,7 @@ class MagentaService {
     const beatsPerStep = 1.0 / stepsPerQuarter;
 
     for (const note of noteSequence.notes) {
-      if (note.pitch === undefined) {
+      if (note.pitch == null) {
         continue;
       }
 
@@ -103,11 +103,11 @@ class MagentaService {
       let startTime: number;
       let duration: number;
 
-      if (note.quantizedStartStep !== undefined && note.quantizedEndStep !== undefined) {
+      if (note.quantizedStartStep != null && note.quantizedEndStep != null) {
         // Convert steps to beats
         startTime = note.quantizedStartStep * beatsPerStep;
         duration = (note.quantizedEndStep - note.quantizedStartStep) * beatsPerStep;
-      } else if (note.startTime !== undefined && note.endTime !== undefined) {
+      } else if (note.startTime != null && note.endTime != null) {
         // Fall back to time-based values
         startTime = note.startTime;
         duration = note.endTime - note.startTime;

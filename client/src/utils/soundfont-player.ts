@@ -354,7 +354,9 @@ export class SoundfontPlayer {
     // Polyphony management - stop oldest notes if limit exceeded
     if (this.activeNotes.size >= this.maxPolyphony) {
       const oldestNote = this.activeNotes.values().next().value;
-      this.activeNotes.delete(oldestNote);
+      if (oldestNote !== undefined) {
+        this.activeNotes.delete(oldestNote);
+      }
     }
 
     // Track this note

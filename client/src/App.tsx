@@ -6,23 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import MelodyGenerator from "@/pages/melody-generator";
 import NotFound from "@/pages/not-found";
 
-// Custom hook for GitHub Pages base path
-function useHashLocation() {
-  const [loc, setLoc] = React.useState(window.location.hash.replace("#", "") || "/");
-
-  React.useEffect(() => {
-    const handler = () => setLoc(window.location.hash.replace("#", "") || "/");
-    window.addEventListener("hashchange", handler);
-    return () => window.removeEventListener("hashchange", handler);
-  }, []);
-
-  const navigate = React.useCallback((to: string) => {
-    window.location.hash = to;
-  }, []);
-
-  return [loc, navigate] as const;
-}
-
 function AppRouter() {
   return (
     <Switch>
