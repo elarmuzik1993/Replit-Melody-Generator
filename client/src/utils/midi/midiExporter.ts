@@ -42,7 +42,7 @@ export const exportToMidi = (
   }
 
   try {
-    const tracks: MidiWriter.Track[] = [];
+    const tracks: InstanceType<typeof MidiWriter.Track>[] = [];
     const trackNames: string[] = [];
 
     // Create Bass track (if generated and enabled)
@@ -153,7 +153,7 @@ function createMidiTrack(
   instrument: number,
   channel: number,
   velocity: number
-): MidiWriter.Track {
+): InstanceType<typeof MidiWriter.Track> {
   const track = new MidiWriter.Track();
   track.setTempo(tempo);
 
