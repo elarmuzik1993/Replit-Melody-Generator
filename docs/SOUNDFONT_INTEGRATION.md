@@ -322,7 +322,7 @@ The soundfont player has been significantly enhanced with professional-grade fea
 - Robust error handling and recovery
 - Real-time effect parameter adjustment
 
-For detailed documentation, see: `client/src/utils/AUDIO_ENGINE_IMPROVEMENTS.md`
+For detailed documentation, see: [AUDIO_ENGINE_IMPROVEMENTS.md](./AUDIO_ENGINE_IMPROVEMENTS.md)
 
 ## Future Enhancements
 

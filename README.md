@@ -2,7 +2,7 @@
 
 A sophisticated web-based music generation tool that creates layered compositions with bass, melody, and harmony tracks. Features genre-specific generation, humanized rhythms, and an interactive Roland TR-8S style step sequencer.
 
-🎵 **[Live Demo](https://your-username.github.io/Replit-Melody-Generator/)**
+🎵 **[Live Demo](https://elarmuzik1993.github.io/Replit-Melody-Generator/)**
 
 ## Features
 
@@ -146,7 +146,10 @@ Download generated compositions as standard MIDI files (.mid) compatible with al
 │   ├── STEP_SEQUENCER.md             # Sequencer documentation
 │   ├── SOUNDFONT_INTEGRATION.md      # Soundfont system documentation
 │   ├── STYLING_GUIDE.md              # UI design system
-│   └── PROJECT_OVERVIEW.md           # High-level overview
+│   ├── PROJECT_OVERVIEW.md           # High-level overview
+│   ├── AUDIO_ENGINE_IMPROVEMENTS.md  # Audio engine details
+│   └── history/                      # Past plans, migrations, changelogs
+├── scripts/verify.sh                 # Type check + build + doc-link check
 └── README.md
 ```
 
@@ -160,7 +163,7 @@ Download generated compositions as standard MIDI files (.mid) compatible with al
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/Replit-Melody-Generator.git
+git clone https://github.com/elarmuzik1993/Replit-Melody-Generator.git
 cd Replit-Melody-Generator
 
 # Install dependencies
@@ -214,14 +217,16 @@ npm run deploy
 
 Comprehensive documentation available in the `/docs` folder:
 
-- **[COMPONENT_STRUCTURE.md](./COMPONENT_STRUCTURE.md)** - UI component hierarchy and file structure
-- **[STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md)** - State architecture and patterns
-- **[GENRE_SYSTEM.md](./GENRE_SYSTEM.md)** - Genre characteristics and implementation
-- **[MELODY_GENERATION_IMPROVEMENTS.md](./MELODY_GENERATION_IMPROVEMENTS.md)** - Algorithm details and humanization phases
-- **[STEP_SEQUENCER.md](./STEP_SEQUENCER.md)** - Step sequencer system documentation
-- **[SOUNDFONT_INTEGRATION.md](./SOUNDFONT_INTEGRATION.md)** - Dual audio engine system with soundfonts
-- **[STYLING_GUIDE.md](./STYLING_GUIDE.md)** - UI design system and color palette
-- **[PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md)** - High-level project overview
+- **[COMPONENT_STRUCTURE.md](./docs/COMPONENT_STRUCTURE.md)** - UI component hierarchy and file structure
+- **[STATE_MANAGEMENT.md](./docs/STATE_MANAGEMENT.md)** - State architecture and patterns
+- **[GENRE_SYSTEM.md](./docs/GENRE_SYSTEM.md)** - Genre characteristics and implementation
+- **[MELODY_GENERATION_IMPROVEMENTS.md](./docs/MELODY_GENERATION_IMPROVEMENTS.md)** - Algorithm details and humanization phases
+- **[STEP_SEQUENCER.md](./docs/STEP_SEQUENCER.md)** - Step sequencer system documentation
+- **[SOUNDFONT_INTEGRATION.md](./docs/SOUNDFONT_INTEGRATION.md)** - Dual audio engine system with soundfonts
+- **[STYLING_GUIDE.md](./docs/STYLING_GUIDE.md)** - UI design system and color palette
+- **[PROJECT_OVERVIEW.md](./docs/PROJECT_OVERVIEW.md)** - High-level project overview
+- **[AUDIO_ENGINE_IMPROVEMENTS.md](./docs/AUDIO_ENGINE_IMPROVEMENTS.md)** - Audio engine processing details
+- **[docs/history/](./docs/history/)** - Refactoring plan, phase reports, soundfont migration, audio engine changelog
 
 ## Contributing
 
@@ -261,9 +266,9 @@ MIT License - feel free to use this project for any purpose.
 
 ## Links
 
-- **Live Demo**: https://your-username.github.io/Replit-Melody-Generator/
-- **Repository**: https://github.com/your-username/Replit-Melody-Generator
-- **Issues**: https://github.com/your-username/Replit-Melody-Generator/issues
+- **Live Demo**: https://elarmuzik1993.github.io/Replit-Melody-Generator/
+- **Repository**: https://github.com/elarmuzik1993/Replit-Melody-Generator
+- **Issues**: https://github.com/elarmuzik1993/Replit-Melody-Generator/issues
 
 ---
 

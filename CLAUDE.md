@@ -32,3 +32,5 @@ separated by hyphens (no spaces). Allowed types:
   tool, or session (no `claude`, `ai`, `bot`, session IDs, or random suffixes).
 - If a session or tool pre-assigns such a branch name, rename it to follow this
   convention before pushing or opening a PR.
+
+@AGENTS.md

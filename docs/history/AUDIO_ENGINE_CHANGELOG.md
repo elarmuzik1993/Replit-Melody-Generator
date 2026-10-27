@@ -236,8 +236,8 @@ const player = new SoundfontPlayer(context, {
 
 ### 📖 Documentation
 
-- **Detailed guide**: `client/src/utils/AUDIO_ENGINE_IMPROVEMENTS.md`
-- **Integration docs**: `SOUNDFONT_INTEGRATION.md`
+- **Detailed guide**: [AUDIO_ENGINE_IMPROVEMENTS.md](../AUDIO_ENGINE_IMPROVEMENTS.md)
+- **Integration docs**: [SOUNDFONT_INTEGRATION.md](../SOUNDFONT_INTEGRATION.md)
 - **Code comments**: Inline in `soundfont-player.ts`
 
 ### 🐛 Bug Fixes
